@@ -7,3 +7,4 @@ __pycache__/
 *.local.json
 .local/
 .state/
+/tmp.org
