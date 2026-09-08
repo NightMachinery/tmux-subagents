@@ -299,6 +299,27 @@ log every `ListAgents`/`SendMessage` result and every incoming message verbatim.
   answer.
 - Give every child the same checkpoint duty as the parent: a progress note at
   a known path after each milestone, so a restart or a compaction can resume.
+- The registry's `process_state` is not updated when a session finishes, so it
+  can read "running" for a session that ended (both Codex sessions on
+  2026-09-09). Determine liveness from the status script or the pane, not from
+  the registry field.
+
+### Coordinator handoff
+
+A run longer than the parent's quota window ends with a *different* session
+coordinating it. The protocol (handoff brief, successor launched on the other
+profile with `--name`, old parent demoted to relay duty) is the
+`long-run-handoff` skill; three rules bind this skill's plumbing:
+
+- **The result file is the protocol.** Every child writes one at an assigned
+  path, always, whatever else it does.
+- **`SendMessage` is a courtesy.** It is a fast wake-up for a parent that still
+  exists. A child that only messages its parent has reported to nobody once
+  that parent is compacted, out of quota, or replaced.
+- **Cross-profile children are file-only.** Neither direction can see or reach
+  the other, so a successor on another profile inherits them as result files
+  plus `tmux send-keys -l`, and the old parent must relay its own in-process
+  children's reports into the shared results directory before it stops.
 
 ### Recursive delegation
 
