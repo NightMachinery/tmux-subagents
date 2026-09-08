@@ -50,6 +50,30 @@ arrangement. Coordinate ownership when agents share a checkout; a tmux session
 provides terminal separation, not filesystem isolation. Check delegated work
 before incorporating it into the parent's answer or changes.
 
+### Personal-to-work profile handoff
+
+Before a non-work parent delegates to a work profile, check whether the child
+might receive or access private personal information. Use the user's local
+profile classification; do not assume that a display name proves account scope.
+Review the brief and the context the child may load: workspace files, inherited
+instructions, memory/history, attachments, and connected tools. A sanitized
+prompt alone does not prevent access through those other routes.
+
+Prepare the smallest useful brief and access scope, excluding unrelated personal
+information. If the child might still need or encounter private personal data,
+confirm with the user before launch or before granting the additional access.
+Explain which information could be exposed, why it may be needed, and whether a
+sanitized handoff or staying on the non-work profile would suffice. Do not quote
+sensitive contents merely to ask the question. Choosing a work profile alone is
+not consent to expose personal information. Existing explicit authorization for
+this delegation's data and access scope suffices; do not ask again for that same
+scope. If the scope expands, obtain confirmation for the additional exposure.
+
+Carry these boundaries into the child brief and descendant delegations. When
+confirmation is needed, keep the work-profile handoff pending and continue only
+work that does not expose that information. A profile switch or tmux session is
+not a data-isolation boundary, and this instruction skill does not enforce one.
+
 ### Identity and names
 
 Use one tmux session per agent. Name it:

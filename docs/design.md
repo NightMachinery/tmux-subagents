@@ -10,6 +10,11 @@ validated basic tmux use only, not the proposed recursive protocol.
   skills/tmux-subagents and a concise repository README.
 - Children inherit their immediate parent's provider and profile unless
   explicitly overridden; this applies recursively.
+- A non-work-to-work handoff must minimize private personal context and obtain
+  confirmation before possible personal-data exposure unless that specific scope
+  is already explicitly authorized. Check both supplied context and information
+  the child may access, including automatically loaded instructions and memory.
+  Carry the restriction into descendants and revisit it when access expands.
 - Support Google Antigravity CLI (agy) alongside Claude Code and Codex. New agy
   children use Gemini Flash Latest by default; Pro Latest requires an explicit
   request scoped to the child or subtree. Provider/profile inheritance remains

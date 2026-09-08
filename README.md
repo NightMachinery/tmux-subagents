@@ -76,7 +76,11 @@ result artifacts remain. Busy children and unselected descendants are protected.
 
 Published examples use generic labels. Keep profile mappings, workspace paths,
 briefs, transcripts, results, and runtime metadata in private local storage.
-Loading the skill grants no additional permissions and does not switch branches.
+Before a non-work parent hands off to a work profile, minimize personal context
+and confirm any possible private-personal-data access with the user unless that
+scope was already explicitly authorized. This includes files, memory, and tools,
+not just the prompt. Loading the skill grants no additional permissions and does
+not switch branches.
 
 - [Skill](skills/tmux-subagents/SKILL.md)
 - [Design and remaining automation](docs/design.md)
