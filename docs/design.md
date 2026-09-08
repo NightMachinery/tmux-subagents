@@ -1,8 +1,9 @@
 # tmux subagents design draft
 
-Status: instruction skill with a planned automation layer. No bundled launcher
-or cleanup command has been implemented. Launching one interactive Claude consultation
-validated basic tmux use only, not the proposed recursive protocol.
+Status: instruction skill with four small POSIX helpers (launch, wait, status,
+Codex notify adapter) and a planned cleanup command. The notification channel
+was verified with real sessions on 2026-09-09; the recursive protocol and
+cleanup remain unvalidated.
 
 ## Accepted direction
 
@@ -87,6 +88,27 @@ exposes model, name, session-id, and resume. A real interactive consultation was
 launched through an alternate local profile and remained open after answering.
 Shell compatibility mattered: the first launcher selected an incompatible
 system shell; the installed compatible shell succeeded.
+
+## Notification channel: verified behaviour and redis
+
+Measured 2026-09-09 (details in SKILL.md "Verified 2026-09-09"): Claude peer
+messaging (`ListAgents`/`SendMessage`/`notify_when_idle`) works between
+sessions sharing a CLAUDE_CONFIG_DIR and fails in both directions across
+profiles, even though every session's socket sits in one shared directory.
+Codex `notify` and Claude `Stop` hooks can be injected per launch (`-c`,
+`--settings`) and chained to the user's existing hook, so no global config
+edit is needed. `tmux-subagent-wait.sh` covers result, needs-input, dead pane,
+and gone session.
+
+Redis was raised as an alternative bus. A local redis-server (7.2, Homebrew)
+is running on this machine, but it adds nothing here: result and status files
+are inspectable with `cat`, survive daemon and session restarts, need no
+server, and are already what the waiter and hooks consume. Pub/sub only helps
+a consumer that blocks on the channel, and a Claude or Codex session cannot
+block on redis except through a background process, which is exactly the role
+`tmux-subagent-wait.sh` or a `tail -f status.jsonl` Monitor already fills. A
+redis dependency would also make the skill non-portable to machines without
+the daemon. Not adopted; revisit only if a cross-machine fan-out appears.
 
 ## Validation before release
 

@@ -8,7 +8,7 @@ provider and profile unless explicitly overridden.
 `skills/tmux-subagents/scripts/` (`tmux-subagent-launch.sh` creates and
 registers a session, `tmux-subagent-wait.sh` blocks until a child's result,
 needs-input file, or pane death, `tmux-subagent-status.sh` appends a status
-line for hooks). `agent-clean-fz` and the rich cleanup preview are still planned.
+line for hooks, `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it). `agent-clean-fz` and the rich cleanup preview are still planned.
 
 ## Install
 
@@ -69,11 +69,16 @@ send instructions while you own the child.
 ## Children notify the parent
 
 A tmux pane cannot wake its parent, so the skill sets up a push channel at
-launch: Claude children `SendMessage` the parent's peer name on COMPLETED /
-BLOCKED / NEEDS-INPUT and the parent arms `notify_when_idle`; Codex and agy
-children write a result file that the parent waits on in the background with
-`tmux-subagent-wait.sh`; provider hooks can append to a shared `status.jsonl`.
-Details in the skill's "Notifications" section.
+launch. Verified 2026-09-09: Claude children on the **same profile** (same
+`CLAUDE_CONFIG_DIR`) `SendMessage` the parent's peer name on COMPLETED /
+BLOCKED / NEEDS-INPUT and the parent's `notify_when_idle` yields one idle
+notice. Across profiles neither side lists or can reach the other, so those
+children, like Codex and agy, write a result file that the parent waits on in
+the background with `tmux-subagent-wait.sh`. Turn-end hooks
+(`codex -c notify=[...]` via `tmux-subagent-codex-notify.sh`, Claude
+`--settings` Stop hook via `tmux-subagent-status.sh`) append to a shared
+`status.jsonl` without editing user config. Details and the test matrix are in
+the skill's "Notifications" and "Verified 2026-09-09" sections.
 
 ## Finished children
 

@@ -13,8 +13,9 @@ its connection to the parent. Read the provider section for the child being
 launched, which may differ from the parent provider.
 
 This is an instruction skill: perform the workflow using the host's shell and
-file tools. A bundled launcher and central-registry automation are not provided.
-The rich cleanup command is a planned integration; do not claim it is installed.
+file tools. `scripts/` holds four small POSIX helpers (launch and register,
+wait, status line, Codex notify adapter); the rich cleanup command is a planned
+integration; do not claim it is installed.
 
 Use a common operation vocabulary across providers: start, inspect, send, wait,
 interrupt, and stop. Keep provider-specific launch and input delivery details in
@@ -193,38 +194,89 @@ not yet implemented by this instructions-only draft.
 
 ### Notifications: children push, parents do not poll
 
-A tmux session cannot wake its parent. Left to itself the parent only learns
-that a child finished when it happens to capture the pane, which in practice
-means minutes to hours of dead time or a human pointing it out. Every
-delegation therefore sets up a push channel at launch, chosen by provider:
+A tmux pane cannot wake its parent, so every delegation sets up a push
+channel at launch. What follows was verified on 2026-09-09 (Claude Code
+2.1.265, Codex CLI, macOS); the matrix is in the subsection after this one.
 
-- **Claude Code child.** Launch with `--name <role>` so the child has a stable
-  peer name. Put the parent's own peer name (as printed by the parent's
-  `ListAgents`, e.g. "LinFine-0 ⑂ work") in the brief and require the child to
-  call `SendMessage` to that name when it completes, is blocked, or needs a
-  decision, with a first line `COMPLETED`, `BLOCKED` or `NEEDS-INPUT` followed
-  by a two-line summary and the result-file path. Right after launch the
-  parent calls `SendMessage(to: <child name>, notify_when_idle: true)`, which
-  yields exactly one idle notice even if the child forgets; re-arm it after
-  every follow-up message.
-- **Codex or agy child.** These cannot message a Claude parent. The brief
-  requires the result file (below); the parent arms
-  `scripts/tmux-subagent-wait.sh RESULT_FILE PANE_ID` in the background
-  (Claude Code: Bash with `run_in_background`), which exits, and thus
+- **Claude Code child, same profile (same CLAUDE_CONFIG_DIR).** Launch with
+  `--name <role>`. The child then appears in the parent's `ListAgents` with its
+  tmux `session:window.pane`, and the parent appears in the child's. Put the
+  parent's peer name (as `ListAgents` prints it) in the brief and require the
+  child to `SendMessage` it on completion, block, or question, first line
+  `COMPLETED`, `BLOCKED` or `NEEDS-INPUT`, then a two-line summary and the
+  result-file path. It arrives as
+  `<cross-session-message from="uds:..." from-name="<child>" ...>` and wakes an
+  idle parent as a new turn. After launch, and after every follow-up, the
+  parent calls `SendMessage(to: <child>, notify_when_idle: true)`; one
+  `[Cross-session idle notice]` arrives when the child next ends a turn, even
+  if the child forgot to report. Idle is not completion: read the result file.
+- **Claude Code child, other profile.** Sessions under different
+  CLAUDE_CONFIG_DIR values do not see each other in `ListAgents`, and
+  `SendMessage` fails with "No agent named '<x>' is reachable" in both
+  directions, although the sockets share one directory. Treat a cross-profile
+  child like a Codex child (next item). For input, `tmux send-keys -l` into
+  the child's pane works even while it is busy (the TUI queues typed text);
+  respect the ownership rules above.
+- **Codex, agy, or cross-profile child.** The brief requires the result file;
+  the parent runs `scripts/tmux-subagent-wait.sh RESULT_FILE PANE_ID` in the
+  background (Claude Code: Bash with `run_in_background`). It exits, and so
   notifies, on the first of: result file present, needs-input file present,
-  pane dead or gone. One notification per assignment; re-arm after each
-  follow-up. Where the provider has a turn-end hook (Codex `notify`, Claude
-  `Stop`/`Notification` hooks), have it call
-  `scripts/tmux-subagent-status.sh TASK_ID NODE_ID STATE SUMMARY`, which
-  appends to the shared `status.jsonl`; a parent that runs many children can
-  `tail -f` that file filtered by task ID (Claude Code: Monitor) instead of
-  arming one waiter per child.
+  pane dead (`remain-on-exit`), session gone. One notification per assignment;
+  re-arm after each follow-up.
+- **Turn-end hooks, without touching user config.** Codex: launch with
+  `-c 'notify=["<abs>/tmux-subagent-codex-notify.sh","TASK","NODE",<original
+  notify argv...>]'`; the adapter appends a `turn_end` line with the Codex
+  payload (`thread-id`, `turn-id`, `last-assistant-message`) to the shared
+  `status.jsonl` and then execs the original notify command with the same
+  payload, so an existing bell keeps ringing. Claude: launch with
+  `--settings '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"<abs>/tmux-subagent-status.sh TASK NODE completed -"}]}]}}'`;
+  the `-` reads the hook JSON from stdin. `--settings` merges with, and does
+  not replace, the user's settings. A `Notification` hook with matcher
+  `permission_prompt` or `idle_prompt` can record `needs_input` the same way
+  (documented, not exercised). A parent with many children can `tail -f
+  status.jsonl` filtered by task ID (Claude Code: Monitor) instead of one
+  waiter each. A turn end is not task completion.
 - **Needs input.** A child that must ask writes `<result stem>.needs-input.md`
-  beside its result file with the question and what it will do if unanswered.
-  The waiter fires on it. The parent answers through the provider's message
-  channel (Claude) or, under the ownership rules above, through terminal
-  input, then deletes the needs-input file and re-arms the waiter.
+  beside its result file with the question and its default if unanswered. The
+  waiter fires on it. The parent answers through `SendMessage` (same-profile
+  Claude) or, under the ownership rules, through terminal input, deletes the
+  needs-input file, and re-arms the waiter.
 - Terminal captures remain diagnosis, never the completion signal.
+
+### Verified 2026-09-09
+
+Each test used two throwaway Haiku sessions launched by
+`scripts/tmux-subagent-launch.sh` into a scratch directory, briefed by file to
+log every `ListAgents`/`SendMessage` result and every incoming message verbatim.
+
+- work -> work (`claude-work --name msgP`, `claude-work --name msgC`):
+  visibility both ways: yes; child->parent `SendMessage`: delivered, woke the
+  idle parent; parent->child with `notify_when_idle`: delivered, then one
+  `[Cross-session idle notice] "msgC" ... is idle now` arrived when the child
+  ended its turn.
+- default -> work (`claude --name msgD` in the same cwd): `ListAgents` showed
+  only default-profile peers; `SendMessage(to:"msgP")` and `(to:"msgC")`:
+  `{"success":false,"message":"No agent named 'msgP' is reachable..."}`.
+- work -> default: `SendMessage(to:"msgD")` from msgP: "No agent named 'msgD'
+  is reachable. Did you mean: msgC?". A separate coordinator saw the same for
+  its own work->default pair. No idle notice can be armed in either direction.
+- `tmux-subagent-wait.sh`: exited on RESULT (0), NEEDS-INPUT (0), DEAD pane
+  under `remain-on-exit` (1), and GONE session (1).
+- Codex: `codex exec -c 'notify=[adapter,TASK,NODE,logger]' "Reply ok"` fired
+  `notify` at turn end (`"client":"codex_exec"`); `status.jsonl` got the
+  `turn_end` line and the chained logger received the identical payload.
+- Claude: `claude -p --model claude-haiku-4-5-20251001 --settings '{...Stop
+  hook...}' "Reply ok"` fired the hook; `status.jsonl` got the Stop payload
+  (`session_id`, `transcript_path`, `cwd`, ...). Interactive `Stop` not
+  separately exercised; it is the same hook.
+- Not verified: `Notification` hooks; agy hooks; `codex queue`; behaviour when
+  the parent is itself busy for a long time (the message queues, as observed
+  for typed input, but ordering under load was not tested).
+- Observed on the way: `--permission-mode auto` silently stayed "manual" on the
+  work profile (organization policy; the default profile has auto), so a
+  child prompted for its first file write; `acceptEdits` worked on both.
+  Right after `tmux kill-session` one child `claude` process was still listed
+  and exited a second later, so verify closure by PID, not by session name.
 
 ### Launch pitfalls (each cost real time)
 
@@ -239,7 +291,9 @@ delegation therefore sets up a push channel at launch, chosen by provider:
   after launch and answer with `tmux send-keys` before the child is handed to
   anyone.
 - Unattended children need a non-interactive permission posture
-  (Claude: `--permission-mode auto`; Codex: the approved local launcher's
+  (Claude: `--permission-mode acceptEdits`, or `auto` where the account
+  allows it; an organization policy can silently leave `auto` in manual mode,
+  so check the child's status line; Codex: the approved local launcher's
   approval policy). Say so in the brief, and say that design questions are
   settled by the brief, so the child does not stall on a question nobody will
   answer.
