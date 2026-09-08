@@ -191,6 +191,61 @@ conversation history or result artifacts. Killing a pane does not prove its
 subprocesses died. agent-clean-fz and the registry are specified here but are
 not yet implemented by this instructions-only draft.
 
+### Notifications: children push, parents do not poll
+
+A tmux session cannot wake its parent. Left to itself the parent only learns
+that a child finished when it happens to capture the pane, which in practice
+means minutes to hours of dead time or a human pointing it out. Every
+delegation therefore sets up a push channel at launch, chosen by provider:
+
+- **Claude Code child.** Launch with `--name <role>` so the child has a stable
+  peer name. Put the parent's own peer name (as printed by the parent's
+  `ListAgents`, e.g. "LinFine-0 ⑂ work") in the brief and require the child to
+  call `SendMessage` to that name when it completes, is blocked, or needs a
+  decision, with a first line `COMPLETED`, `BLOCKED` or `NEEDS-INPUT` followed
+  by a two-line summary and the result-file path. Right after launch the
+  parent calls `SendMessage(to: <child name>, notify_when_idle: true)`, which
+  yields exactly one idle notice even if the child forgets; re-arm it after
+  every follow-up message.
+- **Codex or agy child.** These cannot message a Claude parent. The brief
+  requires the result file (below); the parent arms
+  `scripts/tmux-subagent-wait.sh RESULT_FILE PANE_ID` in the background
+  (Claude Code: Bash with `run_in_background`), which exits, and thus
+  notifies, on the first of: result file present, needs-input file present,
+  pane dead or gone. One notification per assignment; re-arm after each
+  follow-up. Where the provider has a turn-end hook (Codex `notify`, Claude
+  `Stop`/`Notification` hooks), have it call
+  `scripts/tmux-subagent-status.sh TASK_ID NODE_ID STATE SUMMARY`, which
+  appends to the shared `status.jsonl`; a parent that runs many children can
+  `tail -f` that file filtered by task ID (Claude Code: Monitor) instead of
+  arming one waiter per child.
+- **Needs input.** A child that must ask writes `<result stem>.needs-input.md`
+  beside its result file with the question and what it will do if unanswered.
+  The waiter fires on it. The parent answers through the provider's message
+  channel (Claude) or, under the ownership rules above, through terminal
+  input, then deletes the needs-input file and re-arms the waiter.
+- Terminal captures remain diagnosis, never the completion signal.
+
+### Launch pitfalls (each cost real time)
+
+- An interactive zsh may `cd` on startup, so `tmux new-session -c DIR` is not
+  enough: prepend `cd DIR &&` to the command (`scripts/tmux-subagent-launch.sh`
+  does this). Confirm the child's working directory from the pane before
+  handing off; a child that starts in the wrong directory silently works on
+  the wrong tree.
+- First launch in a directory triggers trust prompts (Codex: "Do you trust
+  the contents of this directory?"; Claude: "Is this a project you trust?").
+  Pre-trust the directory in the provider config, or watch the pane for ~20 s
+  after launch and answer with `tmux send-keys` before the child is handed to
+  anyone.
+- Unattended children need a non-interactive permission posture
+  (Claude: `--permission-mode auto`; Codex: the approved local launcher's
+  approval policy). Say so in the brief, and say that design questions are
+  settled by the brief, so the child does not stall on a question nobody will
+  answer.
+- Give every child the same checkpoint duty as the parent: a progress note at
+  a known path after each milestone, so a restart or a compaction can resume.
+
 ### Recursive delegation
 
 A child inherits the run and project identity, records itself as the immediate

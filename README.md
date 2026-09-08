@@ -4,9 +4,11 @@ A shared Claude Code, Codex, and Google Antigravity (`agy`) skill for interactiv
 Children stay inspectable, can launch grandchildren, and inherit their parent's
 provider and profile unless explicitly overridden.
 
-**Status:** instruction skill. A bundled launcher, automated central registry,
-and `agent-clean-fz` are planned; installing this skill does not install those
-commands. The rich cleanup preview is waiting for an existing shared renderer.
+**Status:** instruction skill plus three small POSIX helpers in
+`skills/tmux-subagents/scripts/` (`tmux-subagent-launch.sh` creates and
+registers a session, `tmux-subagent-wait.sh` blocks until a child's result,
+needs-input file, or pane death, `tmux-subagent-status.sh` appends a status
+line for hooks). `agent-clean-fz` and the rich cleanup preview are still planned.
 
 ## Install
 
@@ -63,6 +65,15 @@ tmux attach-session -t '<session-name>'      # interact
 
 Tell the parent when taking control and when handing control back. It must not
 send instructions while you own the child.
+
+## Children notify the parent
+
+A tmux pane cannot wake its parent, so the skill sets up a push channel at
+launch: Claude children `SendMessage` the parent's peer name on COMPLETED /
+BLOCKED / NEEDS-INPUT and the parent arms `notify_when_idle`; Codex and agy
+children write a result file that the parent waits on in the background with
+`tmux-subagent-wait.sh`; provider hooks can append to a shared `status.jsonl`.
+Details in the skill's "Notifications" section.
 
 ## Finished children
 
