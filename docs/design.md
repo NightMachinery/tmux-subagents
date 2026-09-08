@@ -1,0 +1,116 @@
+# tmux subagents design draft
+
+Status: instruction skill with a planned automation layer. No bundled launcher
+or cleanup command has been implemented. Launching one interactive Claude consultation
+validated basic tmux use only, not the proposed recursive protocol.
+
+## Accepted direction
+
+- Use a standalone repository named tmux-subagents, with source under
+  skills/tmux-subagents and a concise repository README.
+- Children inherit their immediate parent's provider and profile unless
+  explicitly overridden; this applies recursively.
+- Keep finished children open and record them in a central private registry.
+  Provide agent-clean-fz to select and close agents, with rich preview, and
+  remove entries only after verified closure.
+- Check for exact-name collisions before spawning and handle tmux creation
+  collisions as well, since two launchers can race after the preflight check.
+- Defer agent-clean-fz rich preview implementation until the user reports that
+  the parallel claude-code-session-resume-fz preview work is finished. Inspect
+  and reuse its shared implementation then; do not create a duplicate now.
+
+## Proposed packaging
+
+Use skills/tmux-subagents/SKILL.md with any runtime scripts inside the skill
+folder, so skill-only installation carries the necessary implementation.
+Keep repo-level documentation and tests outside it. Keep local integration,
+profile paths, actual project details, and runtime state outside public sources.
+
+The skills CLI supports full GitHub tree URLs and direct local directory paths.
+Thus a nested PE/skills/tmux-subagents folder is installable with an explicit
+path even if root-level discovery misses it. A standalone repository simplifies
+installation and independent releases. Installing skills is separate from
+registering shell commands such as agent-clean-fz; document both explicitly.
+
+Current skills CLI source honors CLAUDE_CONFIG_DIR for the global Claude skill
+location. Installation can target each profile separately. A development checkout
+can instead be symlinked into the documented agent skill directories.
+
+## Automation work remaining
+
+- One tmux session per agent remains the default design.
+- Prefer a small portable helper for identity, central registry, spawn, results,
+  ownership, and shutdown; the current draft is instructions only.
+- Use one readable JSON registry at
+  ${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json, overridable
+  locally. It contains both working and finished records; the cleanup picker
+  filters finished ones. Use a stable sidecar advisory lock and atomic file
+  replacement for every update. SQLite is an alternative if transactional
+  complexity outgrows this small registry; do not maintain competing stores.
+- Explicit human hand-back remains the recommended default.
+- Model inheritance/selection and root-wide concurrency/depth defaults remain
+  unspecified. Provider/profile inheritance is settled.
+
+## Cleanup behavior
+
+List finished entries with outcome, project, provider/model/profile alias,
+lineage, timestamps, result summary, artifact paths, and bounded terminal preview.
+Revalidate selection under the same lock used by follow-up dispatch and child
+creation, so a stale picker cannot close a newly busy agent or parent. Do not
+implicitly close unselected descendants. Remove an entry after closure is
+verified; failed closure remains visible. Preserve provider session history and
+result artifacts. Preview functions must not interpret terminal output as shell
+code and should remove unsafe terminal control sequences while preserving the
+intended rendering.
+
+## Consultation findings and decisions
+
+A second agent recommended explicit task result artifacts and stable tmux IDs.
+It preferred shorter names without model or ancestry. The draft retains those
+fields because they are explicit user requirements, and distinguishes launch
+model from effective model. It also suggested process restart for follow-ups;
+that needs careful lifecycle handling and must not create simultaneous writable
+copies of a provider conversation.
+
+The installed Codex CLI exposes queue, resume, profile, and model options.
+Queue delivery has not been behaviorally tested. The installed Claude CLI
+exposes model, name, session-id, and resume. A real interactive consultation was
+launched through an alternate local profile and remained open after answering.
+Shell compatibility mattered: the first launcher selected an incompatible
+system shell; the installed compatible shell succeeded.
+
+## Validation before release
+
+Validate skill frontmatter and cross-provider discovery. For a bundled helper,
+exercise fake interactive children in a separate tmux socket: simultaneous
+spawns, collisions, child/grandchild identity, result freshness, failed starts,
+process exit without results, explicit human ownership, and subtree shutdown.
+Then run authorized real CLI smoke checks for each configured provider/profile.
+Do not describe fake-process checks or CLI help inspection as provider validation.
+
+## Sources
+
+- [Codex skill discovery](https://learn.chatgpt.com/docs/build-skills)
+- [Claude skills and symlinks](https://code.claude.com/docs/en/skills)
+- [Claude environment variables](https://code.claude.com/docs/en/env-vars)
+- [Claude agent-team limitations](https://code.claude.com/docs/en/agent-teams)
+- Installed Claude and Codex CLI help, inspected during design.
+
+## Installation sources
+
+- [Skills CLI source formats](https://github.com/vercel-labs/skills#source-formats)
+- [Skills discovery implementation](https://github.com/vercel-labs/skills/blob/main/src/skills.ts)
+- [Agent profile directories](https://github.com/vercel-labs/skills/blob/main/src/agents.ts)
+- [Superpowers installation](https://github.com/obra/superpowers#installation)
+
+## Packaging boundary
+
+This release packages instructions, not an orchestration application. The skill
+can guide direct tmux operations now. Automated register/finish/close operations
+and agent-clean-fz are follow-up work, with preview implementation explicitly
+waiting for the shared renderer to become available. Installing a SKILL.md does
+not automatically put shell commands on PATH.
+
+Keep local shell integration separate from the portable skill. Reuse the
+completed session-resume preview renderer through that adapter; avoid an
+undeclared dependency on a personal scripts checkout in the public skill.
