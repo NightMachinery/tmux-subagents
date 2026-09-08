@@ -10,6 +10,10 @@ validated basic tmux use only, not the proposed recursive protocol.
   skills/tmux-subagents and a concise repository README.
 - Children inherit their immediate parent's provider and profile unless
   explicitly overridden; this applies recursively.
+- Support Google Antigravity CLI (agy) alongside Claude Code and Codex. New agy
+  children use Gemini Flash Latest by default; Pro Latest requires an explicit
+  request scoped to the child or subtree. Provider/profile inheritance remains
+  independent of model selection.
 - Keep finished children open and record them in a central private registry.
   Provide agent-clean-fz to select and close agents, with rich preview, and
   remove entries only after verified closure.
@@ -48,8 +52,8 @@ can instead be symlinked into the documented agent skill directories.
   replacement for every update. SQLite is an alternative if transactional
   complexity outgrows this small registry; do not maintain competing stores.
 - Explicit human hand-back remains the recommended default.
-- Model inheritance/selection and root-wide concurrency/depth defaults remain
-  unspecified. Provider/profile inheritance is settled.
+- Root-wide concurrency/depth defaults remain unspecified. Provider/profile
+  inheritance and the agy Flash/Pro selection policy are settled.
 
 ## Cleanup behavior
 
@@ -114,3 +118,31 @@ not automatically put shell commands on PATH.
 Keep local shell integration separate from the portable skill. Reuse the
 completed session-resume preview renderer through that adapter; avoid an
 undeclared dependency on a personal scripts checkout in the public skill.
+
+## AGY support and validation
+
+Verified installed agy help and the live agy models listing. The CLI exposes
+--model, --prompt-interactive, --conversation, --effort, and --sandbox. Its model
+listing uses versioned slugs, so Latest is a selection policy rather than an
+assumed CLI alias. Filter by the requested Gemini family and resolve at launch;
+store the result rather than hardcoding today's version in the skill.
+
+The specific Flash default takes precedence over inheriting a Pro parent's
+model. Explicit tree-wide Pro selection may propagate within that user-defined
+scope. A request only for the parent does not authorize Pro for descendants.
+This keeps delegation predictable while preserving explicit model choices.
+
+The CLI's global Markdown skill directory differs from the app's documented
+global skill directory. Document the CLI path separately instead of treating
+the Skills CLI's antigravity target as proven AGY CLI installation support.
+
+Checked instruction consistency and skill validation. An interactive AGY worker
+and AGY skill discovery have not been smoke-tested in this change; no model
+task was launched and no global profile or skill installation was modified.
+
+Sources:
+
+- [AGY model selection and resume](https://antigravity.google/docs/cli/headless/)
+- [AGY CLI skills](https://antigravity.google/docs/cli/plugins/)
+- [Antigravity app skills](https://antigravity.google/docs/skills/)
+- Installed agy --help and agy models output.

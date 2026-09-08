@@ -1,6 +1,6 @@
 ---
 name: tmux-subagents
-description: Launch and coordinate Claude Code or Codex agents in tmux when delegated work should remain inspectable and interactively usable by the user, including recursive child agents.
+description: Launch and coordinate Claude Code, Codex, or Google Antigravity (agy) agents in tmux when delegated work should remain inspectable and interactively usable by the user, including recursive child agents.
 ---
 
 # tmux subagents
@@ -27,10 +27,13 @@ loop or leaving an assigned task unattended.
 Children inherit their immediate parent's provider and profile unless the user
 explicitly specifies an override. Apply this at every depth, including children
 of a parent launched with an override. Record the resolved provider and profile
-in child context rather than relying on ambient tmux environment.
+in child context rather than relying on ambient tmux environment. Model selection
+is separate: agy children default to Gemini Flash Latest; Gemini Pro Latest
+requires an explicit user request covering that child or subtree.
 
-Carry forward the user's chosen model, project directory, permissions, and
-delegation limits. Local profile configuration supplies the
+Honor explicit model choices within their stated scope, and otherwise apply the
+child provider's model policy. Carry forward the project directory, permissions,
+and delegation limits. Local profile configuration supplies the
 trusted launcher executable or shell function and any required shell. Do not
 assume a shell function is an executable or that the system shell can load the
 user's configuration. Do not import an entire parent environment into the tmux
@@ -223,6 +226,62 @@ approval mechanism and report actual launch failures.
 The documented user skill discovery directory is ~/.agents/skills, and symlinked
 skill directories are supported. Optional agents/openai.yaml metadata belongs
 to Codex; keep the shared SKILL.md usable by Claude without it.
+
+## Google Antigravity (agy) instructions
+
+Use Google's agy executable or the selected local launcher; do not substitute
+the separate gemini CLI. Inherit the parent's provider and profile as above.
+Keep local account selection in the launcher configuration: do not invent an
+agy --profile flag or assume Claude/Codex profile variables apply to it.
+
+### Model policy
+
+Default every new agy child to Gemini Flash Latest. Use Gemini Pro Latest only
+when the user explicitly requests Pro for that child or its subtree. A Pro
+parent alone does not select Pro for its children. Do not automatically upgrade
+to Pro for task difficulty, quota failures, or unavailable Flash models.
+
+Resolve Latest through agy models in the selected profile at launch time:
+choose the newest available version in the requested Gemini Flash or Gemini
+Pro family, then pass its exact supported slug to --model. Honor a requested
+effort when selecting its variant, and verify supported effort values against
+agy --help. Do not assume literal gemini-flash-latest or gemini-pro-latest aliases
+are accepted. Treat Flash-Lite, non-Gemini models, and another model family as
+different choices. If the requested family or effort cannot be resolved, report
+the limitation instead of silently substituting a different one.
+
+Record both the policy (Gemini Flash Latest or Gemini Pro Latest) and the exact
+resolved slug in local metadata. Put agy and the sanitized concrete model in
+the session name; leave the current version out of reusable defaults so Latest
+continues to track available releases.
+
+### Interactive launch and resume
+
+Inspect agy --help before using flags. With a model resolved above, launch an
+interactive initial turn inside the owned tmux session using:
+
+    agy --model "$resolved_model" --prompt-interactive "$initial_prompt"
+
+For sensitive context, initial_prompt should point to the private task brief
+rather than contain it. --prompt-interactive keeps the session interactive;
+--print, --prompt, and their structured-output modes are headless alternatives.
+Preserve the user's sandbox and permission settings through the local launcher.
+
+Record the conversation ID when available. Resume a stopped conversation with
+agy --conversation "$conversation_id" under its owning profile. Avoid --continue,
+which can select another agent's most recent conversation. Do not open concurrent
+writable copies. If no verified message-queue interface exists, use the shared
+human-ownership and coordinated terminal-input workflow for live follow-ups.
+
+### Skill loading
+
+AGY CLI documents global Markdown skills under
+~/.gemini/antigravity-cli/skills/. Expose this SKILL.md there as
+tmux-subagents.md and verify /tmux-subagents in the installed CLI. Its global
+CLI path differs from the Antigravity app's documented skills path; do not
+assume an installer target for the app also configures agy. For a delegated
+worker, also provide the skill's absolute path in the brief so it can read the
+same instructions if discovery is unavailable.
 
 ## Privacy
 

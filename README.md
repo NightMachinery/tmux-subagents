@@ -1,6 +1,6 @@
 # tmux-subagents
 
-A shared Claude Code and Codex skill for interactive subagents in tmux.
+A shared Claude Code, Codex, and Google Antigravity (`agy`) skill for interactive subagents in tmux.
 Children stay inspectable, can launch grandchildren, and inherit their parent's
 provider and profile unless explicitly overridden.
 
@@ -24,9 +24,13 @@ For local development, symlink `skills/tmux-subagents` from this checkout into
 `~/.agents/skills/tmux-subagents` and each Claude profile's `skills/` directory.
 Do not overwrite an existing installation accidentally.
 
+For AGY CLI, expose this checkout's `skills/tmux-subagents/SKILL.md` as
+`~/.gemini/antigravity-cli/skills/tmux-subagents.md` and verify the slash command
+appears. This is the CLI-specific path; see [Google's guide](https://antigravity.google/docs/cli/plugins/).
+
 ## Use
 
-Invoke `/tmux-subagents` in Claude Code or `$tmux-subagents` in Codex, then ask:
+Invoke `/tmux-subagents` in Claude Code or AGY, or `$tmux-subagents` in Codex:
 
 > Launch a child to review the parser. Use the same provider and profile,
 > keep this worktree, and leave the child open when it finishes.
@@ -34,6 +38,11 @@ Invoke `/tmux-subagents` in Claude Code or `$tmux-subagents` in Codex, then ask:
 The skill guides the agent to launch a detached interactive session, provide
 its attach command, track parentage, and collect an explicit task result.
 A child receives this same skill and its parent context before delegating again.
+
+AGY children default to **Gemini Flash Latest**. Request **Gemini Pro Latest**
+explicitly to use Pro. Latest is resolved from `agy models` at launch, with the
+concrete model recorded in metadata and the tmux name. A Pro parent does not
+automatically make its children Pro.
 
 ## Names and inspection
 
