@@ -4,12 +4,14 @@
 # Adapter for Codex's `notify` hook, which runs an argv array and appends one
 # JSON payload argument (type "agent-turn-complete", thread-id, turn-id,
 # last-assistant-message, ...). Records a turn_end line via
-# tmux-subagent-status.sh, then execs the user's original notify command (the
-# optional CHAIN_CMD ARGS) with the same payload so an existing bell keeps
-# working. Launch a child with, for example:
-#   codex -c 'notify=["/abs/tmux-subagent-codex-notify.sh","TASK","NODE","brishzq.zsh","h-codex-notify"]' ...
+# tmux-subagent-status.sh, which truncates the payload to 2000 characters, then
+# execs the user's original notify command (the optional CHAIN_CMD ARGS) with
+# the full payload so an existing bell keeps working. Launch a child with, for
+# example:
+#   codex -c 'notify=["/abs/tmux-subagent-codex-notify.sh","TASK","NODE","my-bell"]' ...
 # Turn end is not task completion: the parent still needs the result file.
 set -u
+umask 077
 task="$1"; node="$2"; shift 2
 eval "payload=\${$#}"
 here=$(cd "$(dirname "$0")" && pwd)
