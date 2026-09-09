@@ -132,6 +132,34 @@ inspection can use tmux capture-pane or tmux attach-session -r. Normal attach
 allows interaction. Within tmux, switching clients is a human choice; the
 parent must not silently switch the user's session.
 
+### Launchers: prefer the local wrappers, fall back to the bare CLIs
+
+On the author's machines three wrappers exist and are the preferred way to
+start a child, because they carry the approval policy and profile that a bare
+CLI would not:
+
+- `claude-m`: the default-profile Claude Code launcher (today a plain
+  pass-through to `claude`; keep using it so local policy can be added in one
+  place).
+- `claude-work`: Claude Code on the work profile (`CLAUDE_CONFIG_DIR` set to
+  the work configuration directory, a distinct tty title marker).
+- `codex-m`: Codex with the local security options, detailed reasoning
+  summaries, web search and auto-approval, e.g.
+  `codex-m --model <model> -c model_reasoning_effort=low '<prompt>'`.
+  It may open with an AGENTS.md sync question before the prompt runs; the
+  parent must answer it (`tmux send-keys -t <session> Enter` after checking
+  the pane) or the child sits idle. Verified 2026-09-09 on four launches.
+
+They are zsh shell functions, not executables: `command -v` from a bash
+launcher or from a child's non-zsh shell reports nothing. Detect them with
+`zsh -ic 'whence -w claude-m codex-m claude-work'`, and run them through the
+user's shell (a tmux session started with the login shell sees them; a
+`bash -c` line does not). If a wrapper is absent on the machine, fall back to
+the bare `claude` / `codex` and supply the pieces the wrapper would have added
+explicitly: `CLAUDE_CONFIG_DIR=<dir> claude ...` for a profile, and the
+approval and sandbox flags the local runbook prescribes for `codex`. Say in
+the brief and the registry which launcher actually started the child.
+
 ### Results, follow-ups, and human control
 
 Track process state independently from task outcome. A live CLI may have
@@ -336,7 +364,8 @@ permissions, recursion allowance, or concurrency allowance.
 
 ## Claude Code instructions
 
-Use the selected local profile launcher. CLAUDE_CONFIG_DIR selects an alternate
+Use the selected local profile launcher (`claude-m` / `claude-work` where they
+exist, see Launchers above). CLAUDE_CONFIG_DIR selects an alternate
 configuration directory; default-profile configuration can depend on leaving
 that variable unset. Keep account paths and launcher mappings in local config,
 and do not accidentally inherit a different profile from the tmux server.
@@ -361,7 +390,8 @@ context: fork, and tool-permission fields must not redefine the common workflow.
 Inspect installed CLI help independently of Claude's syntax. Interactive codex
 accepts an initial prompt and --model. Its configuration profile and CODEX_HOME
 are separate concepts from Claude's configuration directory. Use the approved
-local launcher and preserve the selected sandbox and approval policy.
+local launcher (`codex-m` where it exists, see Launchers above) and preserve
+the selected sandbox and approval policy.
 
 Use an explicit provider session ID for codex resume. Do not use --last when
 other agents can create sessions concurrently. Record the Codex conversation ID
