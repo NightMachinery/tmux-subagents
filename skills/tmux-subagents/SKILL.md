@@ -146,15 +146,21 @@ CLI would not:
 - `codex-m`: Codex with the local security options, detailed reasoning
   summaries, web search and auto-approval, e.g.
   `codex-m --model <model> -c model_reasoning_effort=low '<prompt>'`.
-  It may open with an AGENTS.md sync question before the prompt runs; the
-  parent must answer it (`tmux send-keys -t <session> Enter` after checking
-  the pane) or the child sits idle. Verified 2026-09-09 on four launches.
+  It may open with a directory-trust question before the prompt runs; the
+  parent must answer it (`tmux send-keys -t <session> Enter`) or the child
+  sits idle. Verified 2026-09-09 on four launches. Read the pane before
+  sending Enter: both wrappers can also ask "Launch anyway, with possibly
+  stale instructions?" when the local instruction-file sync fails, and that
+  question defaults to No, so a blind Enter aborts the launch.
 
 They are zsh shell functions, not executables: `command -v` from a bash
 launcher or from a child's non-zsh shell reports nothing. Detect them with
-`zsh -ic 'whence -w claude-m codex-m claude-work'`, and run them through the
-user's shell (a tmux session started with the login shell sees them; a
-`bash -c` line does not). If a wrapper is absent on the machine, fall back to
+`zsh -ic 'whence -w claude-m codex-m claude-work'`. Always start the child's
+tmux session with an interactive zsh, as `scripts/tmux-subagent-launch.sh`
+does (`tmux new-session ... zsh -ic "cd DIR && COMMAND"`): tmux's
+`default-shell` may be something else entirely (it is `/bin/dash` on the
+author's machine), and a pane started without an explicit `zsh -ic` cannot see
+the wrappers or the user's environment. If a wrapper is absent on the machine, fall back to
 the bare `claude` / `codex` and supply the pieces the wrapper would have added
 explicitly: `CLAUDE_CONFIG_DIR=<dir> claude ...` for a profile, and the
 approval and sandbox flags the local runbook prescribes for `codex`. Say in
