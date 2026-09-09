@@ -7,484 +7,462 @@ description: Launch and coordinate Claude Code, Codex, or Google Antigravity (ag
 
 ## Shared workflow
 
-Use full interactive agent sessions in detached tmux sessions. Each delegated
-agent must be independently attachable, have a bounded assignment, and retain
-its connection to the parent. Read the provider section for the child being
-launched, which may differ from the parent provider.
+Prepare a private brief, launch one detached interactive tmux session, verify
+startup, arm notifications, and validate the child's result. Every child stays
+attachable, holds one bounded assignment, and reports through its assigned
+result file. In order: brief and task ID (Prepare), data access (Privacy), name
+and registry entry (Identity), launch and inspect (Launch), arm the push channel
+(Notifications), validate the result (Results), follow up or hand over
+(Ownership), leave open until closure is authorized (Cleanup).
 
-This is an instruction skill: perform the workflow using the host's shell and
-file tools. `scripts/` holds four small POSIX helpers (launch and register,
-wait, status line, Codex notify adapter); the rich cleanup command is a planned
-integration; do not claim it is installed.
+Use the host's shell and file tools, and read the provider section for the
+child, which may differ from the parent's. Needs tmux, zsh, Python 3, and the
+authenticated CLI you launch. `$skill_dir` is the directory holding this
+SKILL.md; its helpers are not on PATH, so call them by absolute path (Scripts).
+The rich cleanup command is planned, not installed.
 
-Use a common operation vocabulary across providers: start, inspect, send, wait,
-interrupt, and stop. Keep provider-specific launch and input delivery details in
-the relevant section below. Waiting may be on demand or bounded in the
-background; choose according to the parent's task rather than imposing a patrol
-loop or leaving an assigned task unattended.
+## Prepare a delegation
 
-### Prepare a delegation
+Write the child's brief with the inherited provider and profile, authorized
+scope, owned files, root limits, task ID, and artifact paths.
 
 Children inherit their immediate parent's provider and profile unless the user
-explicitly specifies an override. Apply this at every depth, including children
-of a parent launched with an override. Record the resolved provider and profile
-in child context rather than relying on ambient tmux environment. Model selection
-is separate: agy children default to Gemini Flash Latest; Gemini Pro Latest
-requires an explicit user request covering that child or subtree.
+explicitly overrides it, at every depth, including children of an overridden
+parent. Record the resolution in the brief; never rely on the ambient tmux
+environment, never import a parent environment into the tmux server. Model
+selection is separate and follows the child provider's policy.
 
-Honor explicit model choices within their stated scope, and otherwise apply the
-child provider's model policy. Carry forward the project directory, permissions,
-and delegation limits. Local profile configuration supplies the
-trusted launcher executable or shell function and any required shell. Do not
-assume a shell function is an executable or that the system shell can load the
-user's configuration. Do not import an entire parent environment into the tmux
-server or bypass permissions to make a child launch succeed.
+A child never widens its own permissions, recursion, or concurrency allowance,
+and a parent never bypasses permissions to make a launch succeed. Root limits
+bind the whole tree; per-parent limits do not bound fan-out. Reserve and release
+shared slots under the registry lock, counting failed launches.
 
-Give the child a task brief with the objective, relevant context, allowed file
-ownership, expected deliverable, verification expectations, and a unique task
-ID and result-file path. Include the location of this skill and the inherited
-root and parent identity so grandchildren can use the same workflow. A new CLI
-session does not automatically inherit the parent's conversation.
+Create the private task directory before writing into it:
 
-Keep the current branch and worktree unless the user authorized another
-arrangement. Coordinate ownership when agents share a checkout; a tmux session
-provides terminal separation, not filesystem isolation. Check delegated work
-before incorporating it into the parent's answer or changes.
+    umask 077
+    state_dir="${TMUX_SUBAGENTS_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents}"
+    task_dir="$state_dir/tasks/$task_id"
+    mkdir -p "$task_dir"; chmod 700 "$state_dir" "$state_dir/tasks" "$task_dir"
 
-### Personal-to-work profile handoff
+It holds `brief.md`, `checkpoint.md`, `result.md`, `result.needs-input.md`, and
+the launch context; an existing directory needs the same permissions. The brief
+is a file the child reads, since the helper's environment variables brief
+nobody. It states:
 
-Before a non-work parent delegates to a work profile, check whether the child
-might receive or access private personal information. Use the user's local
-profile classification; do not assume that a display name proves account scope.
-Review the brief and the context the child may load: workspace files, inherited
-instructions, memory/history, attachments, and connected tools. A sanitized
-prompt alone does not prevent access through those other routes.
+- objective, verification expectations, deliverable;
+- owned paths, and the assumptions the child may make unasked, so it never
+  stalls on a question nobody will answer; blocking questions go to the
+  needs-input file;
+- resolved provider, profile, model, launcher, and the permission flag used;
+- root, parent, node and task IDs, and this skill's absolute path, so
+  grandchildren use the same workflow;
+- registry, result, needs-input and checkpoint paths, and who to notify.
 
-Prepare the smallest useful brief and access scope, excluding unrelated personal
-information. If the child might still need or encounter private personal data,
-confirm with the user before launch or before granting the additional access.
-Explain which information could be exposed, why it may be needed, and whether a
-sanitized handoff or staying on the non-work profile would suffice. Do not quote
-sensitive contents merely to ask the question. Choosing a work profile alone is
-not consent to expose personal information. Existing explicit authorization for
-this delegation's data and access scope suffices; do not ask again for that same
-scope. If the scope expands, obtain confirmation for the additional exposure.
+Give every child the parent's checkpoint duty: a progress note at that path
+after each milestone, so a restart or compaction can resume. Keep the current
+branch and worktree unless authorized otherwise; a new CLI session does not
+inherit the parent's conversation. Resolve overlapping writes before dispatch,
+and check delegated work before folding it into the parent's output.
 
-Carry these boundaries into the child brief and descendant delegations. When
-confirmation is needed, keep the work-profile handoff pending and continue only
-work that does not expose that information. A profile switch or tmux session is
-not a data-isolation boundary, and this instruction skill does not enforce one.
+## Privacy and the work-profile handoff
 
-### Identity and names
+Minimize the child's data access, and obtain any missing authorization before
+exposing personal information to a work profile. A tmux session, a profile
+switch, and a separate repository are organizational boundaries, not data
+isolation, and this skill enforces none of them.
 
-Use one tmux session per agent. Name it:
+Before a non-work parent delegates to a work profile, review what the child
+receives and what it can reach — workspace files, inherited instructions, memory
+and history, attachments, connected tools — using the user's local profile
+classification; a display name does not prove account scope, and a sanitized
+prompt closes none of those routes.
+
+Prepare the smallest useful brief and access scope. If private personal data
+could still be reached, confirm first: say what could be exposed, why it may be
+needed, and whether a sanitized handoff or staying on the non-work profile would
+do, without quoting sensitive contents. Choosing a work profile is not consent.
+Authorization already given for this scope is enough; ask again only when it
+expands. Until answered, keep the handoff pending and continue only work that
+does not expose the information. Carry these boundaries into descendant
+delegations.
+
+Keep briefs, transcripts, absolute workspace paths, profile mappings, results,
+and conversation IDs under `$state_dir`, owner-only (700 directories, 600
+files), never in tracked skill sources. Never put a sensitive brief on a command
+line, where the process table shows it: write it to the task directory and tell
+the child to read it. Published examples use generic display aliases, because
+terminal labels and screenshots leak names. Never copy credentials or
+environment dumps into task context or metadata.
+
+## Identity and the registry
+
+Allocate node and task IDs, capture tmux IDs at creation, and store the mapping
+in the private shared registry. One tmux session per agent, named:
 
     ag--<project>--<run>--<lineage>--<provider-model>--<role>
-
-A fictional child and grandchild:
-
     ag--demo--review-k7m2--r-a3--claude-opus--review
     ag--demo--review-k7m2--r-a3-b8--codex-modelx--tests
 
-The project is a short, non-sensitive alias. The run combines a human-readable
-session label with a collision-resistant run ID. Lineage starts at r and
-appends a unique node token at each delegation. The provider-model field is a
-sanitized display label; retain the exact model string separately. Use only
-lowercase ASCII letters, digits, and single hyphens within each field, with
-double hyphens separating fields. Normalize punctuation such as model-version
-periods; reject empty or ambiguous fields.
+Project is a short non-sensitive alias; run combines a readable label with a
+collision-resistant ID; lineage starts at `r` and appends a node token per
+delegation; provider-model is a sanitized display label. Lowercase ASCII
+letters, digits and single hyphens inside a field, double hyphens between
+fields; normalize model-version periods; reject empty or ambiguous fields. Keep
+full lineage in metadata; abbreviate the displayed lineage only by agreement.
 
-Store stable node ID, root ID, immediate parent ID, full lineage, requested
-model, observed model when available, provider, local profile reference, task
-ID, working directory, and tmux socket/session/pane IDs in private local
-metadata. Capture tmux IDs at creation, for example with new-session -P -F.
-Use those IDs for subsequent operations. Names are useful labels, not the
-identity database. Record an external parent without inventing a tmux pane.
+Operate on captured tmux IDs, not names (`new-session -P -F` prints them; the
+helper passes them through). The pane id (`%N`) is the stable handle for
+inspection, input, and the waiter: on the author's machine a
+SessionStart/UserPromptSubmit hook renames non-`ag--*` sessions after the
+agent's title, so a session name recorded at launch can go stale, and `ag--*`
+names are exempt only by that hook's own rule. Store node, root and parent IDs,
+lineage, requested model, observed model when known, provider, local profile
+reference, task ID, launcher, working directory, and tmux socket/session/pane
+IDs. Record an external parent without inventing a tmux pane. The name carries
+the launch model and stays stable; a known switch updates the metadata.
 
-Check the intended socket for an exact existing session name before creation,
-including running agents and retained completed sessions. Never replace a
-pre-existing session on a name collision. A preflight check can race with another
-launcher: treat tmux's creation result as authoritative, and on duplicate-name
-failure allocate another ID and retry creation. Coordinate any
-shared counters or registry updates atomically. Do not silently adopt a session
-from an earlier run. Keep labels short without discarding required identity;
-if depth makes full lineage unwieldy, agree on abbreviated ancestry first.
+The registry is one readable JSON file shared across projects and providers,
+keyed by node ID, at
+`${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json` unless
+`TMUX_SUBAGENTS_STATE` overrides it; put its absolute path in the brief. Every
+writer holds the stable `agents.json.lock` sidecar across the whole
+read-update-replace cycle and publishes through a unique temporary file in the
+same directory, as the launch helper does; an append-only log cannot support
+safe removal, and follow-up dispatch and cleanup take the same lock.
 
-Distinguish the requested model from an observed effective model. Update the
-model label when a switch is known. If no reliable model-change signal exists,
-identify the label as the launch model rather than asserting it is current.
-Disable automatic renaming only on windows owned by this workflow.
+The helper stores one entry per launch (identity, lineage, task ID, workdir,
+socket, session and pane IDs, `created`, `process_state: running`,
+`task_outcome: unknown`); the rest is manual. Two consequences, both seen
+2026-09-09: `process_state` is never updated at session end and read `running`
+for two finished Codex sessions, so take liveness from the pane or the status
+log, never that field; and the key is the session name, so identical names on
+two tmux sockets would overwrite one record.
 
-### Launch and inspect
+Check the intended socket for that exact name before creating a session,
+including retained finished ones, and never replace a pre-existing session. The
+preflight can race another launcher: tmux's creation result is authoritative,
+the helper exits 2 on a duplicate, and the caller then allocates another ID and
+retries. Never silently adopt a session from an earlier run.
 
-Launch detached without selecting the user's terminal or detaching an existing
-client. Pass command arguments as an argv array where supported; otherwise use
-correct shell quoting. Do not interpolate task text as executable shell code.
-For sensitive briefs, prefer a private file and a short instruction to read it
-rather than embedding its contents in a process command line.
+## Launch and inspect
 
-Retain the pane on process exit so startup failures remain inspectable. Verify
-that the requested agent actually started; creation of a tmux session alone is
-not proof. Record blocked authentication or permission prompts accurately.
+Run the resolved launcher through the launch helper, then read the pane to
+verify the working directory, the permission posture, and that the task started:
 
-Give the user the session name and commands to inspect and attach. Read-only
-inspection can use tmux capture-pane or tmux attach-session -r. Normal attach
-allows interaction. Within tmux, switching clients is a human choice; the
-parent must not silently switch the user's session.
+    TMUX_SUBAGENT_PARENT="$parent_id" TMUX_SUBAGENT_ROOT="$root_id" \
+      "$skill_dir/scripts/tmux-subagent-launch.sh" --task "$task_id" \
+      "$name" "$workdir" "$launch_command"
 
-### Launchers: prefer the local wrappers, fall back to the bare CLIs
+It prints `NAME SESSION_ID PANE_ID`; capture all three. COMMAND is shell code,
+not a prompt and not an argv array: it needs shell quoting, and task text is
+never interpolated into it. The helper detaches without touching the user's
+terminal, keeps the pane after exit, wires the turn-end hook (Notifications),
+and registers the session.
 
-On the author's machines three wrappers exist and are the preferred way to
-start a child, because they carry the approval policy and profile that a bare
-CLI would not:
+Launch under an interactive zsh, as the helper does (`zsh -ic 'cd "$1" && eval
+"$2"' _ DIR CMD`), for two reasons found the hard way: tmux's `default-shell`
+may be something else entirely (`/bin/dash` on the author's machine), so a pane
+without an explicit `zsh -ic` sees neither the user's shell functions nor
+environment; and an interactive zsh may `cd` during startup, so `tmux
+new-session -c DIR` alone does not put the child in the right tree. Confirm the
+working directory from the pane.
 
-- `claude-m`: the default-profile Claude Code launcher (today a plain
-  pass-through to `claude`; keep using it so local policy can be added in one
-  place).
-- `claude-work`: Claude Code on the work profile (`CLAUDE_CONFIG_DIR` set to
-  the work configuration directory, a distinct tty title marker).
-- `codex-m`: Codex with the local security options, detailed reasoning
-  summaries, web search and auto-approval, e.g.
-  `codex-m --model <model> -c model_reasoning_effort=low '<prompt>'`.
-  It may open with a directory-trust question before the prompt runs; the
-  parent must answer it (`tmux send-keys -t <session> Enter`) or the child
-  sits idle. Verified 2026-09-09 on four launches. Read the pane before
-  sending Enter: both wrappers can also ask "Launch anyway, with possibly
-  stale instructions?" when the local instruction-file sync fails, and that
-  question defaults to No, so a blind Enter aborts the launch.
+Pass the permission flag explicitly in every launch command, then verify it took
+effect; a child inherits no usable posture, and the flag is not guaranteed to
+apply. Verified 2026-09-09 on this machine: both Claude profiles default to
+`"defaultMode": "plan"`, so a bare `claude-m` child cannot write until someone
+approves a plan; `claude auto-mode config` is byte-identical on both profiles
+and an interactive `claude-m --permission-mode auto` child shows `auto mode on`
+in its status line, but `claude -p ... --permission-mode auto` reported
+`"permission_mode":"default"` in its Stop payload on both profiles, so print
+mode does not run auto mode. After launch read the pane's status line (`auto
+mode on`, `accept edits on`, `plan mode on`); if it is wrong, fall back to
+`--permission-mode acceptEdits`. On the Codex side the local `codex-m` already
+passes `--approve-for-me` (approvals auto-reviewed inside the workspace-write
+sandbox), while a bare `codex` needs `--approve-for-me` or `-a on-failure -s
+workspace-write` in the command. Inference, not verified: under workspace-write
+a result path outside the child's workdir goes through the automatic reviewer,
+so prefer a result path inside the workdir.
 
-They are zsh shell functions, not executables: `command -v` from a bash
-launcher or from a child's non-zsh shell reports nothing. Detect them with
-`zsh -ic 'whence -w claude-m codex-m claude-work'`. Always start the child's
-tmux session with an interactive zsh, as `scripts/tmux-subagent-launch.sh`
-does (`tmux new-session ... zsh -ic "cd DIR && COMMAND"`): tmux's
-`default-shell` may be something else entirely (it is `/bin/dash` on the
-author's machine), and a pane started without an explicit `zsh -ic` cannot see
-the wrappers or the user's environment. If a wrapper is absent on the machine, fall back to
-the bare `claude` / `codex` and supply the pieces the wrapper would have added
-explicitly: `CLAUDE_CONFIG_DIR=<dir> claude ...` for a profile, and the
-approval and sandbox flags the local runbook prescribes for `codex`. Say in
-the brief and the registry which launcher actually started the child.
+Bound an unattended child's retries. The local `claude` wrapper reads a zsh
+dynamic variable, `claude_max_retries=30 claude-m ...`, setting
+`CLAUDE_CODE_MAX_RETRIES` for that launch; its default is effectively infinite,
+so a child sitting out an API outage looks alive forever and never trips the
+waiter. Otherwise `CLAUDE_CODE_MAX_RETRIES=30 claude ...`, noting that a wrapper
+setting the variable itself overrides the environment. A dead pane under
+`remain-on-exit` is then the recovery signal: relaunch with `claude --resume` or
+`codex resume`.
 
-### Results, follow-ups, and human control
+Answer the first prompts deliberately, and prefer a directory the profile
+already trusts, such as the parent's. A first launch elsewhere triggers a trust
+question: Codex asks "Do you trust the contents of this directory?" and `codex
+exec` refuses an untrusted non-git directory outright ("Not inside a trusted
+directory and --skip-git-repo-check was not specified", 2026-09-09), while an
+interactive Claude child opens with "Quick safety check: Is this a project you
+created or one you trust? ... No, exit / Yes, I trust this folder / Enter to
+confirm" (verified 2026-09-09, Claude Code 2.1.266; the `-p` path never shows
+it). Its default is "No, exit", so a bare Enter kills the child: capture the
+pane, wait until "Enter to confirm" is rendered, then send `tmux send-keys -t
+"$pane_id" Down` and `Enter` separately, since keys sent before the prompt
+renders are lost or land on the default. Read every prompt before answering: a
+wrapper whose instruction-file sync failed instead asks "Launch anyway, with
+possibly stale instructions?", which also defaults to No. Answer only within the
+existing authorization, then verify the task started; a created tmux session
+proves nothing. Report blocked authentication or permission prompts accurately.
 
-Track process state independently from task outcome. A live CLI may have
-finished its assignment; an exited CLI may have failed without a result.
+Inspect with `tmux capture-pane -p -t "$pane_id" -S -80`, watch with `tmux
+attach-session -r -t "$session_id"`, interact with `tmux attach-session -t
+"$session_id"`. Give the user those commands, judge readiness from the pane
+rather than elapsed time, and never silently switch the user's client.
 
-Require a per-assignment result file containing task_id, node_id, outcome
-(completed, blocked, or failed), summary, artifacts, and verification. Write a
-complete temporary file beside the result and atomically rename it into place
-before ending the turn. Repeat this instruction in follow-up assignments. Use
-new task IDs so a previous result cannot satisfy a new assignment.
+**Local launcher configuration (example).** Machine-specific: an example of what
+a launch context records, not a portable interface. On the author's machines the
+preferred launchers are the zsh wrappers `claude-m` (default Claude profile),
+`claude-work` (`CLAUDE_CONFIG_DIR` pointed at the work configuration), and
+`codex-m` (local sandbox and approval options; verified 2026-09-09 across four
+launches to open with a directory-trust question before the prompt runs). They
+are shell functions, not executables: `command -v` from a bash launcher or a
+non-zsh child reports nothing, so detect them with `zsh -ic 'whence -w claude-m
+codex-m claude-work'`. Where a wrapper is absent, fall back to the bare `claude`
+/ `codex` and supply what it would have added: `CLAUDE_CONFIG_DIR=<dir> claude
+...` for a profile, plus the permission, approval and sandbox flags above.
+Record the resolved launcher in the launch metadata and have the brief point at
+it.
 
-Lifecycle hooks, where supported and verified, can report working, waiting,
-or input-needed states. A turn-ending hook is not proof that the assignment
-finished: use the explicit task result, and account for background work. An
-optional status-plugin bridge should consume these states without becoming the
-source of truth for results or cleanup.
+## Providers
 
-The parent validates the IDs and reads the artifact. Terminal captures are for
-inspection and diagnosis, not a machine completion protocol. A missing result
-is unknown; silence, a prompt, or a timeout does not prove completion. Report a
-missing or blocked result and investigate rather than automatically restarting
-an agent that may still be working.
+Select the child's provider recipe; the sections above hold the policy, these
+the syntax.
 
-Use explicit human ownership before accepting human input. While a user owns
-a child, the parent queues follow-ups and does not inject input, resume another
-copy of its conversation, interrupt it, or close it. Hand-back is explicit;
-detachment or elapsed time alone does not grant ownership back. This convention
-requires cooperation and does not technically prevent typing through raw tmux.
+**Claude Code.** Launch with the resolved profile and a unique peer name:
+`--name` sets it, `--model` selects a model, `--session-id` takes a UUID; check
+installed help before depending on a flag. `CLAUDE_CONFIG_DIR` selects an
+alternate configuration directory, and default-profile configuration can depend
+on leaving it unset, so check that the tmux server did not hand the child
+another profile. Resume by explicit session ID under the same profile, never by
+"most recent session here" and never as a second writable copy of a running
+conversation. `--print` and its JSON modes are non-interactive, so they give
+none of the live TUI this workflow needs; native agent teams are a separate
+feature that may not support nested teammates.
 
-Prefer verified provider message delivery over terminal keystrokes. When only
-terminal input is available, coordinate ownership and known input readiness,
-and use literal text or a private paste buffer. Do not paste into an unknown
-permission modal or while the user is typing. Ownership checks and delivery
-must share a lock if automated; separate check-then-send operations can race.
+**Codex.** Launch interactive `codex` with the resolved profile, sandbox, and
+approval settings, checking its help independently of Claude's syntax: it takes
+an initial prompt and `--model`, its configuration profile and `CODEX_HOME` are
+unrelated to Claude's, and `codex exec` is non-interactive. Resume with an
+explicit conversation ID, not `--last`, when other agents create sessions
+concurrently, and record that ID rather than inventing a Claude-style launch
+flag. A parent sandbox may deny access to the tmux socket: use the host's
+authorized approval mechanism and report real failures. If help exposes `codex
+queue --thread ID --message TEXT`, evaluate it as a follow-up transport
+(Ownership) before automating it; help availability is not delivery.
 
-Leave finished children open and register them centrally for user-selected
-cleanup. Use one private registry shared across projects and providers, keyed
-by stable node IDs, with explicit task outcome and process state. The canonical
-location is ${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json;
-permit an explicit local override. Record its absolute path in child context. Serialize
-updates so concurrent children cannot overwrite one another. Atomically publish
-updates; an append-only completion log alone cannot support safe removal.
+**Google Antigravity (agy).** Launch Google's `agy` executable, or the local
+launcher for it, using its own account configuration; do not substitute the
+separate `gemini` CLI, invent an `agy --profile` flag, or assume Claude/Codex
+profile variables apply.
 
-The planned agent-clean-fz command selects finished children with a rich preview
-of task/result, project, provider/model/profile alias, ancestry, timestamps,
-process state, and recent terminal output. Keep preview data local. A follow-up
-must mark the child busy again; re-check state and ownership under the dispatch
-lock before closing anything selected from an older list. Coordinate cleanup
-with new child creation too. Close selected nodes only; do not silently close
-unselected descendants. Block parent cleanup while live descendants depend on
-it unless a subtree cleanup was explicitly selected.
+*Model policy.* Resolve Gemini Flash Latest through `agy models` in the selected
+profile at launch, unless the user explicitly requested Pro for that child or
+its subtree. A Pro parent does not make its children Pro, and difficulty, quota
+failures, or an unavailable Flash model never justify an upgrade. Choose the
+newest version inside the requested family and pass its exact slug to `--model`;
+literal `gemini-flash-latest` aliases are not assumed to work, and Flash-Lite,
+another family, or a non-Gemini model is a different choice. Honor a requested
+effort and verify supported values against `agy --help`. If family or effort
+cannot be resolved, report that instead of substituting. Record policy and exact
+slug in metadata, keep the sanitized model in the session name, and keep today's
+version out of defaults.
 
-After authorized closure, verify the owned processes and tmux session are gone,
-then remove the entry from the central cleanup registry. Preserve failed-close
-entries with a useful error. Already closed sessions may be reconciled only
-after identity and process checks. Closing a terminal does not delete provider
-conversation history or result artifacts. Killing a pane does not prove its
-subprocesses died. agent-clean-fz and the registry are specified here but are
-not yet implemented by this instructions-only draft.
+*Interactive launch and resume.* Start the initial turn inside the owned session
+with `agy --model "$resolved_model" --prompt-interactive "$initial_prompt"`,
+where a sensitive prompt points at the private brief instead of containing it.
+`--prompt-interactive` keeps the session interactive; `--print` and `--prompt`
+are headless. Resume with `agy --conversation "$conversation_id"` under its
+owning profile, never `--continue`, which can select another agent's most recent
+conversation. With no verified message-queue interface, follow-ups go through
+the ownership rules.
 
-### Notifications: children push, parents do not poll
+**Skill loading.** Put this skill in the provider's discovery location and its
+absolute path in every child brief, so a child can still read it when discovery
+fails. Claude Code and Codex read `~/.agents/skills` (symlinked skill
+directories work; optional `agents/openai.yaml` metadata is Codex's and must not
+be required by the shared file). AGY CLI reads
+`~/.gemini/antigravity-cli/skills/`: expose this file there as
+`tmux-subagents.md` and verify `/tmux-subagents` in the installed CLI. That CLI
+path differs from the Antigravity app's, so an installer target for the app does
+not configure agy. Keep frontmatter portable: Claude-specific substitutions,
+`context: fork`, and tool-permission fields must not redefine the workflow.
 
-A tmux pane cannot wake its parent, so every delegation sets up a push
-channel at launch. What follows was verified on 2026-09-09 (Claude Code
-2.1.265, Codex CLI, macOS); the matrix is in the subsection after this one.
+## Results
 
-- **Claude Code child, same profile (same CLAUDE_CONFIG_DIR).** Launch with
-  `--name <role>`. The child then appears in the parent's `ListAgents` with its
-  tmux `session:window.pane`, and the parent appears in the child's. Put the
-  parent's peer name (as `ListAgents` prints it) in the brief and require the
-  child to `SendMessage` it on completion, block, or question, first line
-  `COMPLETED`, `BLOCKED` or `NEEDS-INPUT`, then a two-line summary and the
-  result-file path. It arrives as
-  `<cross-session-message from="uds:..." from-name="<child>" ...>` and wakes an
-  idle parent as a new turn. After launch, and after every follow-up, the
-  parent calls `SendMessage(to: <child>, notify_when_idle: true)`; one
-  `[Cross-session idle notice]` arrives when the child next ends a turn, even
-  if the child forgot to report. Idle is not completion: read the result file.
-- **Claude Code child, other profile.** Sessions under different
-  CLAUDE_CONFIG_DIR values do not see each other in `ListAgents`, and
-  `SendMessage` fails with "No agent named '<x>' is reachable" in both
-  directions, although the sockets share one directory. Treat a cross-profile
-  child like a Codex child (next item). For input, `tmux send-keys -l` into
-  the child's pane works even while it is busy (the TUI queues typed text);
-  respect the ownership rules above.
-- **Codex, agy, or cross-profile child.** The brief requires the result file;
-  the parent runs `scripts/tmux-subagent-wait.sh RESULT_FILE PANE_ID` in the
-  background (Claude Code: Bash with `run_in_background`). It exits, and so
-  notifies, on the first of: result file present, needs-input file present,
-  pane dead (`remain-on-exit`), session gone. One notification per assignment;
-  re-arm after each follow-up.
-- **Turn-end hooks, without touching user config.** Codex: launch with
-  `-c 'notify=["<abs>/tmux-subagent-codex-notify.sh","TASK","NODE",<original
-  notify argv...>]'`; the adapter appends a `turn_end` line with the Codex
-  payload (`thread-id`, `turn-id`, `last-assistant-message`) to the shared
-  `status.jsonl` and then execs the original notify command with the same
-  payload, so an existing bell keeps ringing. Claude: launch with
-  `--settings '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"<abs>/tmux-subagent-status.sh TASK NODE completed -"}]}]}}'`;
-  the `-` reads the hook JSON from stdin. `--settings` merges with, and does
-  not replace, the user's settings. A `Notification` hook with matcher
-  `permission_prompt` or `idle_prompt` can record `needs_input` the same way
-  (documented, not exercised). A parent with many children can `tail -f
-  status.jsonl` filtered by task ID (Claude Code: Monitor) instead of one
-  waiter each. A turn end is not task completion.
-- **Needs input.** A child that must ask writes `<result stem>.needs-input.md`
-  beside its result file with the question and its default if unanswered. The
-  waiter fires on it. The parent answers through `SendMessage` (same-profile
-  Claude) or, under the ownership rules, through terminal input, deletes the
-  needs-input file, and re-arms the waiter.
-- Terminal captures remain diagnosis, never the completion signal.
+Each assignment ends by atomically publishing its result file: process exit,
+turn-end hooks, idle notices, prompts, and terminal captures establish no
+completion. Track process state and task outcome as independent facts, since a
+live CLI may have finished and an exited CLI may have failed silently.
 
-### Verified 2026-09-09
+The result carries `task_id`, `node_id`, `outcome` (completed, blocked or
+failed), summary, artifacts, and verification. The child writes a complete
+temporary file beside it and renames it into place before ending the turn. Every
+assignment, follow-ups included, gets a new task ID *and* a new result path,
+because the waiter tests existence only and an old file would satisfy a new
+assignment. The needs-input file is exactly the result path with `.md` replaced
+by `.needs-input.md`, published the same atomic way.
 
-Each test used two throwaway Haiku sessions launched by
-`scripts/tmux-subagent-launch.sh` into a scratch directory, briefed by file to
-log every `ListAgents`/`SendMessage` result and every incoming message verbatim.
+The parent validates the IDs inside the file before believing it, then reads the
+artifact. A missing result is unknown: silence, a prompt, or a timeout proves
+nothing. Report a missing or blocked result and investigate rather than
+restarting an agent that may still be working.
 
-- work -> work (`claude-work --name msgP`, `claude-work --name msgC`):
-  visibility both ways: yes; child->parent `SendMessage`: delivered, woke the
-  idle parent; parent->child with `notify_when_idle`: delivered, then one
-  `[Cross-session idle notice] "msgC" ... is idle now` arrived when the child
-  ended its turn.
-- default -> work (`claude --name msgD` in the same cwd): `ListAgents` showed
-  only default-profile peers; `SendMessage(to:"msgP")` and `(to:"msgC")`:
-  `{"success":false,"message":"No agent named 'msgP' is reachable..."}`.
-- work -> default: `SendMessage(to:"msgD")` from msgP: "No agent named 'msgD'
-  is reachable. Did you mean: msgC?". A separate coordinator saw the same for
-  its own work->default pair. No idle notice can be armed in either direction.
-- `tmux-subagent-wait.sh`: exited on RESULT (0), NEEDS-INPUT (0), DEAD pane
-  under `remain-on-exit` (1), and GONE session (1).
-- Codex: `codex exec -c 'notify=[adapter,TASK,NODE,logger]' "Reply ok"` fired
-  `notify` at turn end (`"client":"codex_exec"`); `status.jsonl` got the
-  `turn_end` line and the chained logger received the identical payload.
-- Claude: `claude -p --model claude-haiku-4-5-20251001 --settings '{...Stop
-  hook...}' "Reply ok"` fired the hook; `status.jsonl` got the Stop payload
-  (`session_id`, `transcript_path`, `cwd`, ...). Interactive `Stop` not
-  separately exercised; it is the same hook.
-- Not verified: `Notification` hooks; agy hooks; `codex queue`; behaviour when
-  the parent is itself busy for a long time (the message queues, as observed
-  for typed input, but ordering under load was not tested).
-- Observed on the way: `--permission-mode auto` silently stayed "manual" on the
-  work profile (organization policy; the default profile has auto), so a
-  child prompted for its first file write; `acceptEdits` worked on both.
-  Right after `tmux kill-session` one child `claude` process was still listed
-  and exited a second later, so verify closure by PID, not by session name.
+## Ownership and follow-ups
 
-### Launch pitfalls (each cost real time)
+Confirm ownership and input readiness before dispatching a follow-up with a
+fresh task ID and result path. Ownership is an explicit registry field, changed
+only on explicit hand-back; detachment or elapsed time grants nothing back.
+While the user owns a child, the parent queues follow-ups and does not inject
+input, interrupt it, resume another copy of its conversation, or close it. The
+convention needs cooperation: nothing stops typing into a raw tmux pane.
 
-- An interactive zsh may `cd` on startup, so `tmux new-session -c DIR` is not
-  enough: prepend `cd DIR &&` to the command (`scripts/tmux-subagent-launch.sh`
-  does this). Confirm the child's working directory from the pane before
-  handing off; a child that starts in the wrong directory silently works on
-  the wrong tree.
-- First launch in a directory triggers trust prompts (Codex: "Do you trust
-  the contents of this directory?"; Claude: "Is this a project you trust?").
-  Pre-trust the directory in the provider config, or watch the pane for ~20 s
-  after launch and answer with `tmux send-keys` before the child is handed to
-  anyone.
-- Unattended children need a non-interactive permission posture
-  (Claude: `--permission-mode acceptEdits`, or `auto` where the account
-  allows it; an organization policy can silently leave `auto` in manual mode,
-  so check the child's status line; Codex: the approved local launcher's
-  approval policy). Say so in the brief, and say that design questions are
-  settled by the brief, so the child does not stall on a question nobody will
-  answer.
-- Give every child the same checkpoint duty as the parent: a progress note at
-  a known path after each milestone, so a restart or a compaction can resume.
-- The registry's `process_state` is not updated when a session finishes, so it
-  can read "running" for a session that ended (both Codex sessions on
-  2026-09-09). Determine liveness from the status script or the pane, not from
-  the registry field.
+Prefer verified provider message delivery over keystrokes. Where only the
+terminal is available, send literal text with `tmux send-keys -t "$pane_id" -l
+-- "$text"` and Enter separately, after confirming readiness from the pane;
+`send-keys -l` reaches a busy Claude child, whose TUI queues typed text
+(verified 2026-09-09). Never paste into an unknown permission modal or while the
+user is typing. Automated check-then-send races: ownership check and delivery
+happen under the registry lock, which is also held before closing anything
+selected from an older list.
 
-### Coordinator handoff
+## Notifications
 
-A run longer than the parent's quota window ends with a *different* session
-coordinating it. The protocol (handoff brief, successor launched on the other
-profile with `--name`, old parent demoted to relay duty) is the
-`long-run-handoff` skill; three rules bind this skill's plumbing:
+Choose the child's push channel at launch and re-arm it after every assignment;
+a tmux pane cannot wake its parent. Verified 2026-09-09 (Claude Code 2.1.265,
+Codex CLI, macOS) with two throwaway Haiku sessions launched by the launch
+helper into a scratch directory, briefed by file to log every
+`ListAgents`/`SendMessage` result and every incoming message verbatim.
 
-- **The result file is the protocol.** Every child writes one at an assigned
+- **Claude child, same profile** (same `CLAUDE_CONFIG_DIR`): launch with `--name
+  <role>`; parent and child then see each other in `ListAgents` with their tmux
+  `session:window.pane`. Put the parent's peer name in the brief and require a
+  `SendMessage` on completion, block, or question: first line `COMPLETED`,
+  `BLOCKED`, or `NEEDS-INPUT`, then a two-line summary and the result path. It
+  arrives as `<cross-session-message from="uds:..." from-name="<child>" ...>`
+  and wakes an idle parent as a new turn. After launch and after every follow-up
+  the parent calls `SendMessage(to: <child>, notify_when_idle: true)`; one
+  `[Cross-session idle notice]` arrives at the child's next turn end even if it
+  forgot to report, and idle is not completion. Measured work -> work
+  (`claude-work --name msgP` and `--name msgC`): visibility both ways, the
+  child's message woke the idle parent, and `[Cross-session idle notice] "msgC"
+  ... is idle now` arrived at its turn end.
+- **Claude child, other profile**: sessions under different `CLAUDE_CONFIG_DIR`
+  values do not list each other and `SendMessage` fails in both directions,
+  although the sockets share one directory. Measured default -> work (`claude
+  --name msgD`, same cwd): `ListAgents` showed only default-profile peers and
+  `SendMessage(to:"msgP")` returned `{"success":false,"message":"No agent named
+  'msgP' is reachable..."}`; work -> default: `SendMessage(to:"msgD")` returned
+  "No agent named 'msgD' is reachable. Did you mean: msgC?", and a separate
+  coordinator saw the same for its own pair. No idle notice can be armed either
+  way. Treat such a child as file-only, like Codex and agy.
+- **Codex, agy, or cross-profile child**: the brief requires the result file and
+  the parent runs `"$skill_dir/scripts/tmux-subagent-wait.sh" RESULT PANE_ID` in
+  the background (Claude Code: Bash with `run_in_background`, which turns the
+  process exit into a new turn; a bare shell `&` does not by itself notify a
+  Codex or agy parent, and with no runtime bridge the fallback is an explicit
+  check at the parent's next turn). One notification per assignment.
+- **Needs input**: a child that must ask publishes the needs-input file with the
+  question and its default if unanswered; the waiter fires on it. The parent
+  answers by `SendMessage` or, under the ownership rules, through the terminal,
+  deletes the file, and re-arms the waiter.
+
+**Turn-end hooks.** Wire them per launch, on the command line, so no user config
+file is touched: `--task TASK` makes the launch helper insert them, and only for
+the children it starts. Claude gets `--settings` with a `Stop` hook running
+`tmux-subagent-status.sh TASK NODE turn_end -`, merging with rather than
+replacing the user's settings; Codex gets `-c
+'notify=["<abs>/tmux-subagent-codex-notify.sh","TASK","NODE"]'`, whose adapter
+also execs the user's original notify command with the same payload so an
+existing bell keeps ringing (not automatic: pass its argv words as repeated
+`--notify-chain` items). A turn end is not task completion.
+
+Verified 2026-09-09: `codex exec` fired `notify` at turn end
+(`"client":"codex_exec"`), `status.jsonl` got the `turn_end` line with the
+`thread-id`, `turn-id`, and `last-assistant-message` payload, and the chained
+command received the identical payload; `claude -p --model
+claude-haiku-4-5-20251001` fired the `Stop` hook and `status.jsonl` got its
+payload (`session_id`, `transcript_path`, `cwd`, ...). Interactive `Stop` was
+not separately exercised; it is the same hook. A `Notification` hook with
+matcher `permission_prompt` or `idle_prompt` can record `needs_input` the same
+way (documented, not exercised); a hook only appends a status line and never
+creates the file the waiter watches. Not verified: `Notification` hooks, agy
+hooks, `codex queue`, and behaviour when the parent is itself busy for a long
+time (the message queues, as observed for typed input, but ordering under load
+was not tested). A parent with many children can `tail -f status.jsonl` filtered
+by task ID (Claude Code: Monitor) instead of one waiter each, provided that
+stream actually wakes it.
+
+## Coordinator handoff
+
+Before a coordinator stops, give its successor the shared registry path and, for
+every active assignment, the child's context, result path, ownership, and
+notification state: a run longer than the parent's quota window ends with a
+different session coordinating it. The full protocol is the `long-run-handoff`
+skill, which this skill does not install; without it, write that list to a
+handoff file in the state directory and name the successor in it. Three rules
+bind the plumbing here:
+
+- **The result file is the protocol.** Every child writes one at its assigned
   path, always, whatever else it does.
-- **`SendMessage` is a courtesy.** It is a fast wake-up for a parent that still
-  exists. A child that only messages its parent has reported to nobody once
-  that parent is compacted, out of quota, or replaced.
-- **Cross-profile children are file-only.** Neither direction can see or reach
-  the other, so a successor on another profile inherits them as result files
-  plus `tmux send-keys -l`, and the old parent must relay its own in-process
-  children's reports into the shared results directory before it stops.
+- **`SendMessage` is a courtesy.** A child that only messages its parent has
+  reported to nobody once that parent is compacted, out of quota, or replaced.
+- **Cross-profile children are file-only.** A successor on another profile
+  inherits them as result files plus `tmux send-keys -l`, so the old parent
+  relays its own children's reports into the shared results directory first.
 
-### Recursive delegation
+## Cleanup
 
-A child inherits the run and project identity, records itself as the immediate
-parent of its children, and uses these same instructions. Pass identity through
-an explicit task context or per-child environment; do not mutate the global
-tmux server environment to announce the current parent. Verify context reaches
-the child's shell tools because provider environment filtering can remove it.
+Leave finished sessions open until the user authorizes closure; the
+`agent-clean-fz` picker is planned, not implemented, so cleanup is manual today.
+Its preview fields are specified in `docs/design.md`; whatever selects agents
+must re-check state and ownership under the dispatch lock before closing
+anything.
 
-Respect the root's limits across the whole tree. Local per-parent limits do not
-bound total fan-out. If enforcing shared limits, reserve and release slots
-atomically and account for failed launches. A child must not increase its own
-permissions, recursion allowance, or concurrency allowance.
+Close selected nodes only, never unselected descendants, and block a parent's
+closure while live descendants depend on it unless a subtree cleanup was chosen.
+After an authorized closure verify by PID that the owned processes are gone, not
+by session name: right after a `tmux kill-session` on 2026-09-09 one child
+`claude` process was still listed and exited a second later, and killing a pane
+does not prove its subprocesses died. Then remove the entry under the registry
+lock; keep failed closures visible with a useful error, and reconcile an
+already-closed session only after identity and process checks. Closing a
+terminal deletes neither conversation history nor result artifacts.
 
-## Claude Code instructions
+## Scripts
 
-Use the selected local profile launcher (`claude-m` / `claude-work` where they
-exist, see Launchers above). CLAUDE_CONFIG_DIR selects an alternate
-configuration directory; default-profile configuration can depend on leaving
-that variable unset. Keep account paths and launcher mappings in local config,
-and do not accidentally inherit a different profile from the tmux server.
+Run these by absolute path from `$skill_dir/scripts`; they need tmux and Python
+3, and launch also needs zsh. They share one state directory,
+`TMUX_SUBAGENTS_STATE` or else
+`${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents`; pass the same resolved
+directory to parent, child, and hooks.
 
-Inspect installed CLI help before depending on flags. Interactive Claude Code
-accepts an initial prompt; --model selects a model, --name supplies a display
-name, and --session-id accepts a UUID. Retain the provider session ID separately
-from the tmux and workflow IDs. Resume a stopped session using its explicit ID
-and the same profile; do not use a directory's most recent session implicitly.
-Do not resume a second writable copy of an already running conversation.
+- `tmux-subagent-launch.sh [--task TASK] [--notify-chain ITEM]... NAME WORKDIR
+  COMMAND` creates, hooks, and registers one detached session; use it for every
+  spawn. Prints `NAME SESSION_ID PANE_ID`. Exit 2 is a name collision (allocate
+  another ID and retry), 3 means the session runs but is unregistered.
+- `tmux-subagent-wait.sh RESULT_FILE [PANE_ID] [POLL_SECONDS]` is the background
+  waiter: RESULT and NEEDS-INPUT exit 0, DEAD and GONE exit 1, default interval
+  15 s, all four outcomes verified 2026-09-09. It polls, so it moves polling out
+  of the parent's turn rather than removing it, and tests existence only:
+  validate the IDs in the file after waking.
+- `tmux-subagent-status.sh TASK_ID NODE_ID STATE [SUMMARY|-]` appends one status
+  event, from a hook or directly for progress notes; `-` reads stdin, and both
+  forms are truncated to 2000 characters.
+- `tmux-subagent-codex-notify.sh TASK_ID NODE_ID [CHAIN_CMD ARGS...] PAYLOAD`
+  logs a Codex turn end and chains the user's own notify command.
 
---print and its JSON output modes are noninteractive and do not by themselves
-provide the live TUI required by this workflow. Native agent teams are a
-separate feature; do not assume they support nested teammates.
+Status events publish no results and update no registry lifecycle state.
+Follow-up dispatch, ownership, closure, and the cleanup picker are manual.
 
-Install the shared skill through a symlink in the profile's personal skills
-directory. Keep shared frontmatter portable; Claude-specific substitutions,
-context: fork, and tool-permission fields must not redefine the common workflow.
+## References
 
-## Codex instructions
+The repository README covers installation, `docs/design.md` records pending
+automation, `docs/related-projects.md` evaluated integrations; optional
+maintainer background, not needed to use the installed skill.
 
-Inspect installed CLI help independently of Claude's syntax. Interactive codex
-accepts an initial prompt and --model. Its configuration profile and CODEX_HOME
-are separate concepts from Claude's configuration directory. Use the approved
-local launcher (`codex-m` where it exists, see Launchers above) and preserve
-the selected sandbox and approval policy.
-
-Use an explicit provider session ID for codex resume. Do not use --last when
-other agents can create sessions concurrently. Record the Codex conversation ID
-when available rather than inventing a Claude-style --session-id launch flag.
-
-If installed help exposes codex queue --thread ID --message TEXT, evaluate it
-as the preferred follow-up transport. Verify delivery, idle-session behavior,
-and interaction with human ownership before automating it. Help availability
-alone does not establish reliable end-to-end behavior.
-
-codex exec is noninteractive. Native agent tools, when available, have their own
-lifecycle and do not automatically produce the tmux sessions described here.
-A parent sandbox may deny access to the tmux socket; use the host's authorized
-approval mechanism and report actual launch failures.
-
-The documented user skill discovery directory is ~/.agents/skills, and symlinked
-skill directories are supported. Optional agents/openai.yaml metadata belongs
-to Codex; keep the shared SKILL.md usable by Claude without it.
-
-## Google Antigravity (agy) instructions
-
-Use Google's agy executable or the selected local launcher; do not substitute
-the separate gemini CLI. Inherit the parent's provider and profile as above.
-Keep local account selection in the launcher configuration: do not invent an
-agy --profile flag or assume Claude/Codex profile variables apply to it.
-
-### Model policy
-
-Default every new agy child to Gemini Flash Latest. Use Gemini Pro Latest only
-when the user explicitly requests Pro for that child or its subtree. A Pro
-parent alone does not select Pro for its children. Do not automatically upgrade
-to Pro for task difficulty, quota failures, or unavailable Flash models.
-
-Resolve Latest through agy models in the selected profile at launch time:
-choose the newest available version in the requested Gemini Flash or Gemini
-Pro family, then pass its exact supported slug to --model. Honor a requested
-effort when selecting its variant, and verify supported effort values against
-agy --help. Do not assume literal gemini-flash-latest or gemini-pro-latest aliases
-are accepted. Treat Flash-Lite, non-Gemini models, and another model family as
-different choices. If the requested family or effort cannot be resolved, report
-the limitation instead of silently substituting a different one.
-
-Record both the policy (Gemini Flash Latest or Gemini Pro Latest) and the exact
-resolved slug in local metadata. Put agy and the sanitized concrete model in
-the session name; leave the current version out of reusable defaults so Latest
-continues to track available releases.
-
-### Interactive launch and resume
-
-Inspect agy --help before using flags. With a model resolved above, launch an
-interactive initial turn inside the owned tmux session using:
-
-    agy --model "$resolved_model" --prompt-interactive "$initial_prompt"
-
-For sensitive context, initial_prompt should point to the private task brief
-rather than contain it. --prompt-interactive keeps the session interactive;
---print, --prompt, and their structured-output modes are headless alternatives.
-Preserve the user's sandbox and permission settings through the local launcher.
-
-Record the conversation ID when available. Resume a stopped conversation with
-agy --conversation "$conversation_id" under its owning profile. Avoid --continue,
-which can select another agent's most recent conversation. Do not open concurrent
-writable copies. If no verified message-queue interface exists, use the shared
-human-ownership and coordinated terminal-input workflow for live follow-ups.
-
-### Skill loading
-
-AGY CLI documents global Markdown skills under
-~/.gemini/antigravity-cli/skills/. Expose this SKILL.md there as
-tmux-subagents.md and verify /tmux-subagents in the installed CLI. Its global
-CLI path differs from the Antigravity app's documented skills path; do not
-assume an installer target for the app also configures agy. For a delegated
-worker, also provide the skill's absolute path in the brief so it can read the
-same instructions if discovery is unavailable.
-
-## Privacy
-
-Keep published instructions and examples generic. Store runtime briefs,
-transcripts, absolute workspace paths, profile mappings, result files, and
-conversation IDs outside tracked skill sources with owner-only access. Do not
-copy credentials or environment dumps into task context or metadata. Naming
-uses display aliases because terminal labels and screenshots can expose them.
-A separate repository is an organizational boundary, not a privacy guarantee.
-
-## Design references
-
-For installation, see the repository README. The repository's docs/design.md
-records pending automation, and docs/related-projects.md explains evaluated
-integrations. They are maintainer references; using the installed skill does
-not require those repository-level files.
