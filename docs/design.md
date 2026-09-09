@@ -1,9 +1,10 @@
 # tmux subagents design draft
 
 Status: instruction skill with four small POSIX helpers (launch, wait, status,
-Codex notify adapter) and a planned cleanup command. The notification channel
-was verified with real sessions on 2026-09-09; the recursive protocol and
-cleanup remain unvalidated.
+Codex notify adapter) and a planned cleanup command. The notification channel,
+the turn-end hooks, and the helpers' launch, registration, and waiting paths
+were exercised with real sessions on 2026-09-09; the recursive protocol,
+ownership handover, and cleanup remain unvalidated.
 
 ## Accepted direction
 
@@ -50,13 +51,18 @@ can instead be symlinked into the documented agent skill directories.
 
 - One tmux session per agent remains the default design.
 - Prefer a small portable helper for identity, central registry, spawn, results,
-  ownership, and shutdown; the current draft is instructions only.
+  ownership, and shutdown. The bundled helpers now cover spawn, registration,
+  turn-end hooks, waiting, and status events; ownership, follow-up dispatch,
+  lifecycle updates to a registry entry, slot accounting, and closure are still
+  carried out by the agent following the instructions.
 - Use one readable JSON registry at
   ${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json, overridable
   locally. It contains both working and finished records; the cleanup picker
-  filters finished ones. Use a stable sidecar advisory lock and atomic file
-  replacement for every update. SQLite is an alternative if transactional
-  complexity outgrows this small registry; do not maintain competing stores.
+  filters finished ones. Every update takes a stable sidecar advisory lock
+  (agents.json.lock) and replaces the file through a unique temporary file in the
+  same directory; the launch helper does this, and every other writer must.
+  SQLite is an alternative if transactional complexity outgrows this small
+  registry; do not maintain competing stores.
 - Explicit human hand-back remains the recommended default.
 - Root-wide concurrency/depth defaults remain unspecified. Provider/profile
   inheritance and the agy Flash/Pro selection policy are settled.
@@ -100,8 +106,9 @@ Codex `notify` and Claude `Stop` hooks can be injected per launch (`-c`,
 edit is needed. `tmux-subagent-wait.sh` covers result, needs-input, dead pane,
 and gone session.
 
-Redis was raised as an alternative bus. A local redis-server (7.2, Homebrew)
-is running on this machine, but it adds nothing here: result and status files
+Redis was raised as an alternative bus. A redis daemon was already running on
+the development machine (see the local configuration example below), but it
+adds nothing here: result and status files
 are inspectable with `cat`, survive daemon and session restarts, need no
 server, and are already what the waiter and hooks consume. Pub/sub only helps
 a consumer that blocks on the channel, and a Claude or Codex session cannot
@@ -109,6 +116,17 @@ block on redis except through a background process, which is exactly the role
 `tmux-subagent-wait.sh` or a `tail -f status.jsonl` Monitor already fills. A
 redis dependency would also make the skill non-portable to machines without
 the daemon. Not adopted; revisit only if a cross-machine fan-out appears.
+
+## Local configuration (example)
+
+Illustrative only: one workstation's setup, not part of the design and not
+required by the skill. Local zsh wrapper functions (claude-m, claude-work,
+codex-m) carry the profile selection and the approval policy that a bare CLI
+would not, which is why the launch helper always starts a pane with an
+interactive zsh; a redis daemon happened to be installed there, which is what
+prompted the comparison above; and the tmux default-shell was not zsh. Keep the
+actual profile mappings, option arrays, and paths in private local
+configuration.
 
 ## Validation before release
 
@@ -136,11 +154,13 @@ Do not describe fake-process checks or CLI help inspection as provider validatio
 
 ## Packaging boundary
 
-This release packages instructions, not an orchestration application. The skill
-can guide direct tmux operations now. Automated register/finish/close operations
-and agent-clean-fz are follow-up work, with preview implementation explicitly
-waiting for the shared renderer to become available. Installing a SKILL.md does
-not automatically put shell commands on PATH.
+This release packages instructions plus four small helpers, not an orchestration
+application. Spawn, registration, turn-end hooks, waiting, and status events are
+implemented; finish/close operations, follow-up dispatch, and agent-clean-fz are
+follow-up work, with preview implementation explicitly waiting for the shared
+renderer to become available. Installing a SKILL.md does not put the helpers or
+any shell command on PATH: call them by absolute path inside the skill
+directory.
 
 Keep local shell integration separate from the portable skill. Reuse the
 completed session-resume preview renderer through that adapter; avoid an

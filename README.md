@@ -4,11 +4,13 @@ A shared Claude Code, Codex, and Google Antigravity (`agy`) skill for interactiv
 Children stay inspectable, can launch grandchildren, and inherit their parent's
 provider and profile unless explicitly overridden.
 
-**Status:** instruction skill plus three small POSIX helpers in
-`skills/tmux-subagents/scripts/` (`tmux-subagent-launch.sh` creates and
-registers a session, `tmux-subagent-wait.sh` blocks until a child's result,
-needs-input file, or pane death, `tmux-subagent-status.sh` appends a status
-line for hooks, `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it). `agent-clean-fz` and the rich cleanup preview are still planned.
+**Status:** instruction skill plus four small POSIX helpers in
+`skills/tmux-subagents/scripts/`: `tmux-subagent-launch.sh` creates a session,
+wires the provider's turn-end hook, and registers it; `tmux-subagent-wait.sh`
+blocks until a child's result, needs-input file, or pane death;
+`tmux-subagent-status.sh` appends a status line for hooks; and
+`tmux-subagent-codex-notify.sh` adapts Codex `notify` to it. Follow-up dispatch,
+closure, `agent-clean-fz`, and the rich cleanup preview are still planned.
 
 ## Install
 
@@ -77,8 +79,9 @@ children, like Codex and agy, write a result file that the parent waits on in
 the background with `tmux-subagent-wait.sh`. Turn-end hooks
 (`codex -c notify=[...]` via `tmux-subagent-codex-notify.sh`, Claude
 `--settings` Stop hook via `tmux-subagent-status.sh`) append to a shared
-`status.jsonl` without editing user config. Details and the test matrix are in
-the skill's "Notifications" and "Verified 2026-09-09" sections.
+`status.jsonl` without editing user config; the launch helper adds them for the
+children it starts when given a task ID. Details and the measurements are in the
+skill's "Notifications" section.
 
 ## Finished children
 
