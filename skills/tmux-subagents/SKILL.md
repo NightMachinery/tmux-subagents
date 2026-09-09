@@ -164,7 +164,7 @@ terminal, keeps the pane after exit, wires the turn-end hook (Notifications),
 and registers the session.
 
 Launch under an interactive zsh, as the helper does (`zsh -ic 'cd "$1" && eval
-"$2"' _ DIR CMD`), for two reasons found the hard way: tmux's `default-shell`
+"$2"' _ DIR CMD`), for two reasons: tmux's `default-shell`
 may be something else entirely (`/bin/dash` on the author's machine), so a pane
 without an explicit `zsh -ic` sees neither the user's shell functions nor
 environment; and an interactive zsh may `cd` during startup, so `tmux
