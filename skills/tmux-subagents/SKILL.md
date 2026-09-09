@@ -112,14 +112,18 @@ full lineage in metadata; abbreviate the displayed lineage only by agreement.
 
 Operate on captured tmux IDs, not names (`new-session -P -F` prints them; the
 helper passes them through). The pane id (`%N`) is the stable handle for
-inspection, input, and the waiter: on the author's machine a
-SessionStart/UserPromptSubmit hook renames non-`ag--*` sessions after the
-agent's title, so a session name recorded at launch can go stale, and `ag--*`
-names are exempt only by that hook's own rule. Store node, root and parent IDs,
-lineage, requested model, observed model when known, provider, local profile
-reference, task ID, launcher, working directory, and tmux socket/session/pane
-IDs. Record an external parent without inventing a tmux pane. The name carries
-the launch model and stays stable; a known switch updates the metadata.
+inspection, input, and the waiter. A session name recorded at launch can go
+stale: on the author's machine a SessionStart/UserPromptSubmit hook renames
+non-`ag--*` sessions after the agent's title. Worse, tmux reads a target by its
+first character, `%` a pane, `$` a session, `@` a window, so a renamed session
+whose title happens to start with `@` is parsed as a window id and cannot be
+addressed by name at all. Never address a child by session name after launch;
+use `%N`, or the `$N` from `tmux display -p -t "$pane" '#{session_id}'`. Store
+node, root and parent IDs, lineage, requested model, observed model when known,
+provider, local profile reference, task ID, launcher, working directory, and
+tmux socket/session/pane IDs. Record an external parent without inventing a tmux
+pane. The name carries the launch model and stays stable; a known switch updates
+the metadata.
 
 The registry is one readable JSON file shared across projects and providers,
 keyed by node ID, at
@@ -167,19 +171,19 @@ environment; and an interactive zsh may `cd` during startup, so `tmux
 new-session -c DIR` alone does not put the child in the right tree. Confirm the
 working directory from the pane.
 
-Pass the permission flag explicitly in every launch command, then verify it took
-effect; a child inherits no usable posture, and the flag is not guaranteed to
-apply. Verified 2026-09-09 on this machine: both Claude profiles default to
-`"defaultMode": "plan"`, so a bare `claude-m` child cannot write until someone
-approves a plan; `claude auto-mode config` is byte-identical on both profiles
-and an interactive `claude-m --permission-mode auto` child shows `auto mode on`
-in its status line, but `claude -p ... --permission-mode auto` reported
-`"permission_mode":"default"` in its Stop payload on both profiles, so print
-mode does not run auto mode. After launch read the pane's status line (`auto
-mode on`, `accept edits on`, `plan mode on`); if it is wrong, fall back to
-`--permission-mode acceptEdits`. On the Codex side the local `codex-m` already
-passes `--approve-for-me` (approvals auto-reviewed inside the workspace-write
-sandbox), while a bare `codex` needs `--approve-for-me` or `-a on-failure -s
+Pass the permission flag explicitly in every launch command, then confirm it in
+the pane; a child inherits no usable posture. Verified 2026-09-09 (Claude Code
+2.1.266) on this machine: both Claude profiles default to `"defaultMode":
+"plan"`, so a bare `claude-m` child cannot write until someone approves a plan,
+while an interactive child started with `--permission-mode auto` in an
+already-trusted directory shows `auto mode on` in its status line on either
+profile; `claude -p ... --permission-mode auto` reported
+`"permission_mode":"default"` in its Stop payload, so print mode does not run
+auto mode. Read the pane's status line after launch (`auto mode on`, `accept
+edits on`, `plan mode on`) and fall back to `--permission-mode acceptEdits` only
+if it says otherwise. On the Codex side the local `codex-m` already passes
+`--approve-for-me` (approvals auto-reviewed inside the workspace-write sandbox),
+while a bare `codex` needs `--approve-for-me` or `-a on-failure -s
 workspace-write` in the command. Inference, not verified: under workspace-write
 a result path outside the child's workdir goes through the automatic reviewer,
 so prefer a result path inside the workdir.
