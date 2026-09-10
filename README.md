@@ -9,8 +9,12 @@ provider and profile unless explicitly overridden.
 wires the provider's turn-end hook, and registers it; `tmux-subagent-wait.sh`
 blocks until a child's result, needs-input file, or pane death;
 `tmux-subagent-status.sh` appends a status line for hooks; and
-`tmux-subagent-codex-notify.sh` adapts Codex `notify` to it. Follow-up dispatch,
-closure, `agent-clean-fz`, and the rich cleanup preview are still planned.
+`tmux-subagent-codex-notify.sh` adapts Codex `notify` to it. Follow-up dispatch
+is still planned. Closure is a documented procedure rather than a packaged
+command: the picker `agent-clean-fz` and `agent-subagents-close` exist as local
+zsh functions on the author's machine, deriving every state on read, and
+elsewhere the parent performs the steps in the skill's Cleanup section by
+hand.
 
 ## Install
 
@@ -87,9 +91,14 @@ skill's "Notifications" section.
 
 Keep them open for follow-ups. The agreed central registry lives at
 `${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json`, outside repos.
-The planned `agent-clean-fz` will offer rich previews and multi-selection, verify
-closure, then remove closed agents from that registry. Conversation history and
-result artifacts remain. Busy children and unselected descendants are protected.
+Its `process_state` and `task_outcome` fields are written at launch and never
+updated, so a child's state is derived on every read instead: from its tmux
+session, its pane, its result file, the status log, and the agent's own live
+listing. Closing verifies by PID before the entry is removed. Conversation
+history and result artifacts remain. Busy children and unselected descendants
+are protected. On the author's machine that is `agent-clean-fz` (a preview and
+multi-select picker) and `agent-subagents-close`; elsewhere it is the Cleanup
+procedure done by hand.
 
 ## Privacy and design
 

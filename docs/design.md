@@ -1,10 +1,11 @@
 # tmux subagents design draft
 
 Status: instruction skill with four small POSIX helpers (launch, wait, status,
-Codex notify adapter) and a planned cleanup command. The notification channel,
-the turn-end hooks, and the helpers' launch, registration, and waiting paths
-were exercised with real sessions on 2026-09-09; the recursive protocol,
-ownership handover, and cleanup remain unvalidated.
+Codex notify adapter); cleanup is a documented procedure with a local, not
+packaged, implementation. The notification channel, the turn-end hooks, and the
+helpers' launch, registration, and waiting paths were exercised with real
+sessions on 2026-09-09, and the local close path against throwaway children on
+2026-09-10; the recursive protocol and ownership handover remain unvalidated.
 
 ## Accepted direction
 
@@ -53,8 +54,10 @@ can instead be symlinked into the documented agent skill directories.
 - Prefer a small portable helper for identity, central registry, spawn, results,
   ownership, and shutdown. The bundled helpers now cover spawn, registration,
   turn-end hooks, waiting, and status events; ownership, follow-up dispatch,
-  lifecycle updates to a registry entry, slot accounting, and closure are still
-  carried out by the agent following the instructions.
+  slot accounting, and follow-up dispatch are still carried out by the agent
+  following the instructions. A registry entry gets no lifecycle updates by
+  design: state is derived on read (see Cleanup behavior). Closure is the
+  Cleanup procedure, local commands where they exist and by hand otherwise.
 - Use one readable JSON registry at
   ${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents/agents.json, overridable
   locally. It contains both working and finished records; the cleanup picker
@@ -78,6 +81,35 @@ verified; failed closure remains visible. Preserve provider session history and
 result artifacts. Preview functions must not interpret terminal output as shell
 code and should remove unsafe terminal control sequences while preserving the
 intended rendering.
+
+Implemented locally, outside this repository, as the zsh functions
+`agent-subagents-list`, `agent-subagents-reconcile`, `agent-subagents-close`,
+`agent-subagents-preview` and the picker `agent-clean-fz` (see SKILL.md,
+Cleanup). Three decisions there are worth recording, because they are the
+skill's model of a child's lifecycle and not local taste:
+
+- **State is derived on every read and stored nowhere.** The registry's
+  `process_state` and `task_outcome` are written at launch and never updated --
+  both read `running`/`unknown` for two finished Codex children on 2026-09-09 --
+  so they are ignored entirely rather than repaired. Every state comes instead
+  from the tmux session, the pane's `pane_dead`, the task's result file
+  validated against the entry's own IDs, the newest `status.jsonl` line for the
+  task, and the agent's live listing. A stored lifecycle field would only be a
+  second source of truth to disagree with the first.
+- **A `stuck` state sits between the published outcomes and the live ones.**
+  Alive, nothing published, and silent past a threshold (600s locally): usually
+  finished in a way tmux cannot see, but not known finished the way a validated
+  result file is known. The ordering offered for closure runs done, mismatch,
+  needs-input, stuck, idle, unknown, busy.
+- **Dead panes are skipped, not closed.** `remain-on-exit` keeps them
+  inspectable, and clearing them is a separate whole-server operation; the
+  picker leaves them to it and reconciles the entry afterwards. Entries whose
+  session is gone are reconciled away with no kill at all.
+
+One tmux socket is assumed, so the registry's `tmux_socket` is recorded and not
+consulted. Closure kills the pane processes and their descendants by PID,
+verifies by PID, removes the entry under the lock, and appends a `closed` event
+through `tmux-subagent-status.sh` so the log keeps one writer.
 
 ## Consultation findings and decisions
 
@@ -156,11 +188,14 @@ Do not describe fake-process checks or CLI help inspection as provider validatio
 
 This release packages instructions plus four small helpers, not an orchestration
 application. Spawn, registration, turn-end hooks, waiting, and status events are
-implemented; finish/close operations, follow-up dispatch, and agent-clean-fz are
-follow-up work, with preview implementation explicitly waiting for the shared
-renderer to become available. Installing a SKILL.md does not put the helpers or
-any shell command on PATH: call them by absolute path inside the skill
-directory.
+implemented; follow-up dispatch is follow-up work. Closure is documented as a
+procedure and implemented outside this repository: `agent-subagents-close` and
+`agent-clean-fz` are zsh functions on the author's machine, built on the shared
+session renderer that is now available, and they are deliberately not packaged
+here -- a picker depending on a personal scripts checkout, its fzf wrappers and
+its Go previewer would be an undeclared dependency in a public skill. Installing
+a SKILL.md does not put the helpers or any shell command on PATH: call them by
+absolute path inside the skill directory.
 
 Keep local shell integration separate from the portable skill. Reuse the
 completed session-resume preview renderer through that adapter; avoid an

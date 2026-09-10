@@ -19,7 +19,8 @@ Use the host's shell and file tools, and read the provider section for the
 child, which may differ from the parent's. Needs tmux, zsh, Python 3, and the
 authenticated CLI you launch. `$skill_dir` is the directory holding this
 SKILL.md; its helpers are not on PATH, so call them by absolute path (Scripts).
-The rich cleanup command is planned, not installed.
+This skill installs no cleanup command; Cleanup is a procedure, with a local
+implementation named there.
 
 ## Prepare a delegation
 
@@ -422,21 +423,61 @@ bind the plumbing here:
 
 ## Cleanup
 
-Leave finished sessions open until the user authorizes closure; the
-`agent-clean-fz` picker is planned, not implemented, so cleanup is manual today.
-Its preview fields are specified in `docs/design.md`; whatever selects agents
-must re-check state and ownership under the dispatch lock before closing
-anything.
+Leave finished sessions open until the user authorizes closure. Then close the
+child by node ID, following the procedure below; it is the same whether a
+command runs it or the parent performs each step by hand.
 
-Close selected nodes only, never unselected descendants, and block a parent's
-closure while live descendants depend on it unless a subtree cleanup was chosen.
-After an authorized closure verify by PID that the owned processes are gone, not
-by session name: right after a `tmux kill-session` on 2026-09-09 one child
-`claude` process was still listed and exited a second later, and killing a pane
-does not prove its subprocesses died. Then remove the entry under the registry
-lock; keep failed closures visible with a useful error, and reconcile an
-already-closed session only after identity and process checks. Closing a
-terminal deletes neither conversation history nor result artifacts.
+**Establish the child's state by deriving it, never by reading the registry.**
+`process_state` and `task_outcome` are written once at launch and never updated
+(Identity), so a finished child still reads `running`. A child is finished when
+its result file exists *and* its front matter names this task and this node; a
+result naming anything else is another assignment's file and authorizes
+nothing. A child with no result is closable only when its session is alive, its
+pane is not dead, the live listing does not report it busy, and it has been
+silent — no new `status.jsonl` line, no new transcript message — long enough
+that it cannot be mid-turn. A child waiting at its needs-input file is not
+finished; answer it or hand it over instead.
+
+**Then close it under the registry lock, in this order:**
+
+- Re-derive that state inside the lock. Any list is stale the moment it is
+  printed, and the child may have started a turn since it was read. Ownership
+  is checked here too: while the user owns a child, the parent does not close
+  it.
+- Refuse a busy child, and refuse a parent while live descendants still run,
+  unless the user chose a subtree cleanup — in which case close the descendants
+  first, deepest first, each through this same procedure. Close selected nodes
+  only, never an unselected descendant.
+- Collect the session's pane PIDs *and every process below each of them* before
+  killing anything; afterwards there is no tree left to walk and nothing to
+  verify against. Send TERM, allow a few seconds, escalate to KILL, then
+  `tmux kill-session`.
+- Verify by PID, not by session name: right after a `tmux kill-session` on
+  2026-09-09 one child `claude` process was still listed and exited a second
+  later, and killing a pane does not prove its subprocesses died. A failed
+  verification leaves the entry in place with a useful error, so a half-closed
+  agent stays visible instead of becoming a ghost.
+- Only then remove the registry entry, and append one `closed` event through
+  `tmux-subagent-status.sh` so that log keeps a single writer and one format.
+
+Skip a child whose pane is already dead. `remain-on-exit` keeps that pane on
+purpose so its last screen can still be read, and removing dead panes is a
+separate, whole-server operation on the author's machine (`tmuxzombie-kill`);
+reconcile the registry entry after it. An entry whose session is simply gone is
+reconciled with none of the above: there is nothing left to kill.
+
+Never touch a task directory. Closing a terminal deletes neither conversation
+history nor result artifacts.
+
+**Local cleanup commands (example).** Machine-specific, in the same register as
+the launcher wrappers above: on the author's machine this procedure is
+`agent-subagents-close <node-id>...` and the multi-select picker
+`agent-clean-fz`, zsh functions in a personal scripts checkout rather than
+anything this skill installs. They derive every state on read, order the picker
+by what is safest to close, hide busy children unless asked, and take
+`agent_subagents_close_force` and `agent_subagents_close_subtree` for the two
+refusals above; `docs/design.md` records the preview fields. Where they are
+absent — which is every other machine — the parent performs the steps by hand.
 
 ## Scripts
 
@@ -462,7 +503,8 @@ directory to parent, child, and hooks.
   logs a Codex turn end and chains the user's own notify command.
 
 Status events publish no results and update no registry lifecycle state.
-Follow-up dispatch, ownership, closure, and the cleanup picker are manual.
+Follow-up dispatch and ownership are manual. Closure follows Cleanup, by hand
+wherever the local commands named there are absent.
 
 ## References
 
