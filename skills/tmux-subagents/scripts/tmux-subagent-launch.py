@@ -15,6 +15,13 @@ import time
 HERE = Path(__file__).resolve().parent
 
 
+class LaunchParser(argparse.ArgumentParser):
+    def error(self, message):
+        # Exit 2 is reserved for a tmux name collision: callers retry it.
+        self.print_usage(sys.stderr)
+        self.exit(64, self.prog + ': error: ' + message + '\n')
+
+
 def tmux(*args, check=True):
     return subprocess.run(['tmux', *args], text=True, capture_output=True, check=check)
 
@@ -53,7 +60,7 @@ def launcher_token(command, requested=None):
 
 def main():
     os.umask(0o077)
-    p = argparse.ArgumentParser(description=__doc__)
+    p = LaunchParser(description=__doc__)
     p.add_argument('--task', default=os.environ.get('TMUX_SUBAGENT_TASK', ''))
     p.add_argument('--notify-chain', action='append', default=[])
     p.add_argument('--resume-command', required=True,

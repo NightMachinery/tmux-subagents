@@ -250,6 +250,14 @@ class PluginTests(unittest.TestCase):
 
 
 class NameTests(unittest.TestCase):
+    def test_usage_error_is_not_a_retryable_collision(self):
+        result = subprocess.run([str(SCRIPTS / 'tmux-subagent-launch.sh'),
+                                 '--plugin', '/nonexistent/agent-session.plugin.zsh',
+                                 '--resume-command', 'unused', 'ag--test', str(ROOT), 'claude'],
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 64)
+        self.assertIn('plugin is missing', result.stderr)
+
     def test_readable_unique_names(self):
         cmd = [str(SCRIPTS / 'tmux-subagent-name.sh'), 'Demo', 'Review parser!', 'Claude.Opus']
         names = [subprocess.check_output(cmd, text=True).strip() for _ in range(2)]
