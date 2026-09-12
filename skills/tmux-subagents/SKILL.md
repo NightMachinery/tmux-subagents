@@ -17,7 +17,11 @@ and registry entry (Identity), launch and inspect (Launch), arm the push channel
 
 Use the host's shell and file tools, and read the provider section for the
 child, which may differ from the parent's. Needs tmux, zsh, Python 3, and the
-authenticated CLI you launch. `$skill_dir` is the directory holding this
+authenticated CLI you launch, plus the portable `agent-session` zsh plugin.
+Set `AGENT_SESSION_PLUGIN` to its absolute `.plugin.zsh` entrypoint; the launcher
+also accepts `--plugin` and detects `~/scripts/zshlang/plugins/agent-session`
+locally. Installation instructions are in the repository README. Missing plugin
+is a setup error; never substitute a new conversation for unavailable resume. `$skill_dir` is the directory holding this
 SKILL.md; its helpers are not on PATH, so call them by absolute path (Scripts).
 This skill installs no cleanup command; Cleanup is a procedure, with a local
 implementation named there.
@@ -100,16 +104,14 @@ environment dumps into task context or metadata.
 Allocate node and task IDs, capture tmux IDs at creation, and store the mapping
 in the private shared registry. One tmux session per agent, named:
 
-    ag--<project>--<run>--<lineage>--<provider-model>--<role>
-    ag--demo--review-k7m2--r-a3--claude-opus--review
-    ag--demo--review-k7m2--r-a3-b8--codex-modelx--tests
+    ag--<project>--<task>--<provider-model>--<suffix>
+    ag--demo--review-parser--claude-opus--a73f20
 
-Project is a short non-sensitive alias; run combines a readable label with a
-collision-resistant ID; lineage starts at `r` and appends a node token per
-delegation; provider-model is a sanitized display label. Lowercase ASCII
-letters, digits and single hyphens inside a field, double hyphens between
-fields; normalize model-version periods; reject empty or ambiguous fields. Keep
-full lineage in metadata; abbreviate the displayed lineage only by agreement.
+Generate the name with `tmux-subagent-name.sh PROJECT TASK PROVIDER-MODEL`.
+Use short non-sensitive project and task labels describing the work. The helper
+normalizes punctuation and whitespace to hyphens and adds a random six-character
+suffix. Keep the run and full ancestry in metadata (`--run`, `--lineage`), not
+the name. Retain the `ag--` prefix so local autonaming hooks leave it alone.
 
 Operate on captured tmux IDs, not names (`new-session -P -F` prints them; the
 helper passes them through). The pane id (`%N`) is the stable handle for
@@ -156,6 +158,7 @@ verify the working directory, the permission posture, and that the task started:
 
     TMUX_SUBAGENT_PARENT="$parent_id" TMUX_SUBAGENT_ROOT="$root_id" \
       "$skill_dir/scripts/tmux-subagent-launch.sh" --task "$task_id" \
+      --resume-command "$resume_command" --run "$run_id" --lineage "$lineage" \
       "$name" "$workdir" "$launch_command"
 
 It prints `NAME SESSION_ID PANE_ID`; capture all three. COMMAND is shell code,
@@ -164,8 +167,30 @@ never interpolated into it. The helper detaches without touching the user's
 terminal, keeps the pane after exit, wires the turn-end hook (Notifications),
 and registers the session.
 
-Launch under an interactive zsh, as the helper does (`zsh -ic 'cd "$1" && eval
-"$2"' _ DIR CMD`), for two reasons: tmux's `default-shell`
+Supply `resume_command` as shell code calling the shared plugin, for example:
+
+    agent-session-resume-exact codex "$AGENT_SESSION_ID" "$AGENT_SESSION_CWD" codex-m --model MODEL
+
+Keep these variables literal until resume. Use the same launcher, profile,
+model and permission settings as the initial command, without its initial
+prompt. The helper persists and reapplies notification flags automatically.
+Pass `--provider claude|codex|agy` for an unfamiliar wrapper; `--hook-launcher`
+identifies its exact launcher token when the shell setup is complex.
+
+The brief requires the child to run
+`"$skill_dir/scripts/tmux-subagent-register.sh" PROVIDER` inside its own shell
+before starting task work. It captures the provider's exported conversation ID.
+Claude startup, Codex notify and local identity hooks provide additional capture.
+Verify `identity.json` under the registry entry's `resume_state` before declaring
+resume ready; if registration fails, report that limitation and resolve it.
+
+`Ctrl-b r` with `bind-key r respawn-pane -k` restarts into the recorded
+conversation in the same pane. It interrupts a running agent; preserve the
+ownership rules. Missing identity or a process still holding the pane lock gives
+a visible error, never a new session or a most-recent-session fallback. Leave
+existing panes alone; they keep their original commands.
+
+Launch under an interactive zsh, as the managed pane runner does, for two reasons: tmux's `default-shell`
 may be something else entirely (`/bin/dash` on the author's machine), so a pane
 without an explicit `zsh -ic` sees neither the user's shell functions nor
 environment; and an interactive zsh may `cd` during startup, so `tmux
@@ -487,9 +512,15 @@ Run these by absolute path from `$skill_dir/scripts`; they need tmux and Python
 `${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents`; pass the same resolved
 directory to parent, child, and hooks.
 
-- `tmux-subagent-launch.sh [--task TASK] [--notify-chain ITEM]... NAME WORKDIR
-  COMMAND` creates, hooks, and registers one detached session; use it for every
-  spawn. Prints `NAME SESSION_ID PANE_ID`. Exit 2 is a name collision (allocate
+- `tmux-subagent-name.sh PROJECT TASK PROVIDER-MODEL` generates a readable,
+  collision-resistant name; run it again after a collision.
+- `tmux-subagent-register.sh PROVIDER` records the child conversation from
+  its own environment; run inside the child before task work.
+- `tmux-subagent-launch.sh --resume-command SHELL_CODE [--task TASK]
+  [--notify-chain ITEM]... [--provider PROVIDER] [--plugin FILE]
+  [--hook-launcher TOKEN] [--run RUN] [--lineage LINEAGE] NAME WORKDIR COMMAND`
+  creates, hooks, registers and prepares resume for one detached session; use
+  it for every spawn. Prints `NAME SESSION_ID PANE_ID`. Exit 2 is a name collision (allocate
   another ID and retry), 3 means the session runs but is unregistered.
 - `tmux-subagent-wait.sh RESULT_FILE [PANE_ID] [POLL_SECONDS]` is the background
   waiter: RESULT and NEEDS-INPUT exit 0, DEAD and GONE exit 1, default interval
