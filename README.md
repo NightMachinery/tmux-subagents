@@ -4,9 +4,9 @@ A shared Claude Code, Codex, and Google Antigravity (`agy`) skill for interactiv
 Children stay inspectable, can launch grandchildren, and inherit their parent's
 provider and profile unless explicitly overridden.
 
-**Status:** instruction skill plus four small POSIX helpers in
+**Status:** instruction skill plus shell/Python helpers in
 `skills/tmux-subagents/scripts/`: `tmux-subagent-launch.sh` creates a session,
-wires the provider's turn-end hook, and registers it; `tmux-subagent-wait.sh`
+wires hooks, registers it, and prepares exact-conversation resume; `tmux-subagent-wait.sh`
 blocks until a child's result, needs-input file, or pane death;
 `tmux-subagent-status.sh` appends a status line for hooks; and
 `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it. Follow-up dispatch
@@ -18,7 +18,13 @@ hand.
 
 ## Install
 
-Requires tmux and the authenticated coding CLIs you want to use.
+Requires tmux, zsh, Python 3, the authenticated coding CLIs you want to use,
+and the portable `agent-session` plugin from `NightMachinery/.shells`.
+The plugin uses no personal shell setup. Install its subdirectory using the
+[plugin README](https://github.com/NightMachinery/.shells/tree/master/scripts/zshlang/plugins/agent-session),
+then export `AGENT_SESSION_PLUGIN` as the absolute path to
+`agent-session.plugin.zsh`. The local `~/scripts` installation is detected by
+default. Dependencies are installed separately; launches never download them.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
@@ -55,13 +61,15 @@ automatically make its children Pro.
 ## Names and inspection
 
 ```text
-ag--<project>--<run>--<lineage>--<provider-model>--<role>
-ag--demo--review-k7m2--r-a3-b8--claude-opus--tests
+ag--<project>--<task>--<provider-model>--<suffix>
+ag--demo--review-parser--claude-opus--a73f20
 ```
 
-Names show the project, session/run, ancestry, launch model, and role. Stable
-tmux IDs identify sessions internally. Check collisions before creating a
-session and retry if another launcher wins the race.
+Names show the project, readable task, and launch model; run and ancestry stay
+in registry metadata. `tmux-subagent-name.sh PROJECT TASK PROVIDER-MODEL`
+sanitizes the labels and adds a random six-character suffix. Stable tmux IDs
+identify sessions internally. The launcher refuses collisions; generate another
+name and retry.
 
 ```sh
 tmux list-sessions
@@ -71,6 +79,38 @@ tmux attach-session -t '<session-name>'      # interact
 
 Tell the parent when taking control and when handing control back. It must not
 send instructions while you own the child.
+
+## Restart the same conversation
+
+Inside a launched session, `Ctrl-b r` restarts the agent into its exact recorded
+conversation. Your tmux prefix may differ. The required binding is:
+
+```tmux
+bind-key r respawn-pane -k
+```
+
+The launcher takes an explicit `--resume-command`: shell code that calls the
+plugin with the recorded ID, original directory, launcher and resume settings.
+For example, with `skill_dir` set to the installed skill directory:
+
+```sh
+name=$("$skill_dir/scripts/tmux-subagent-name.sh" demo review-parser claude-opus)
+"$skill_dir/scripts/tmux-subagent-launch.sh" --task review-1 \
+  --lineage root-review --run parser-review \
+  --resume-command 'agent-session-resume-exact claude "$AGENT_SESSION_ID" "$AGENT_SESSION_CWD" claude --model opus' \
+  "$name" "$PWD" 'claude --model opus "Read the assigned private brief"'
+```
+
+Include the same profile, model and permission settings in both commands; keep
+the initial prompt out of the resume command. Hooks are reapplied automatically.
+The child runs `tmux-subagent-register.sh claude` (or `codex` / `agy`) as its
+first task action. Claude startup hooks, Codex notify, and local identity hooks
+also capture identity. No identity means a visible error, never a fresh or
+“most recent” conversation. A process lock refuses overlapping resumes.
+
+This applies to newly launched sessions; existing panes keep their original
+commands. Pressing the shortcut interrupts active work. In the local scripts
+integration, `/done` also preserves the managed pane's resume settings.
 
 ## Children notify the parent
 

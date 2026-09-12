@@ -1,7 +1,7 @@
 # tmux subagents design draft
 
-Status: instruction skill with four small POSIX helpers (launch, wait, status,
-Codex notify adapter); cleanup is a documented procedure with a local, not
+Status: instruction skill with shell/Python launch, naming, identity, wait,
+status and Codex notify helpers; cleanup is a documented procedure with a local, not
 packaged, implementation. The notification channel, the turn-end hooks, and the
 helpers' launch, registration, and waiting paths were exercised with real
 sessions on 2026-09-09, and the local close path against throwaway children on
@@ -114,9 +114,8 @@ through `tmux-subagent-status.sh` so the log keeps one writer.
 ## Consultation findings and decisions
 
 A second agent recommended explicit task result artifacts and stable tmux IDs.
-It preferred shorter names without model or ancestry. The draft retains those
-fields because they are explicit user requirements, and distinguishes launch
-model from effective model. It also suggested process restart for follow-ups;
+The accepted naming format now keeps the launch model visible and moves run
+and ancestry into registry metadata, making the task label easier to read. It also suggested process restart for follow-ups;
 that needs careful lifecycle handling and must not create simultaneous writable
 copies of a provider conversation.
 
@@ -186,8 +185,8 @@ Do not describe fake-process checks or CLI help inspection as provider validatio
 
 ## Packaging boundary
 
-This release packages instructions plus four small helpers, not an orchestration
-application. Spawn, registration, turn-end hooks, waiting, and status events are
+This release packages instructions and small helpers, with an explicit portable
+`agent-session` zsh plugin dependency. Spawn, registration, turn-end hooks, waiting, and status events are
 implemented; follow-up dispatch is follow-up work. Closure is documented as a
 procedure and implemented outside this repository: `agent-subagents-close` and
 `agent-clean-fz` are zsh functions on the author's machine, built on the shared
@@ -228,3 +227,50 @@ Sources:
 - [AGY CLI skills](https://antigravity.google/docs/cli/plugins/)
 - [Antigravity app skills](https://antigravity.google/docs/skills/)
 - Installed agy --help and agy models output.
+
+## Readable names and exact-conversation resume
+
+Names use `ag--<project>--<task>--<provider-model>--<six-hex-suffix>`. The naming
+helper sanitizes and bounds each field; exact-name collisions remain a launcher
+error. Run and lineage are supplied separately and recorded in the registry.
+
+The shared implementation lives in `.shells/scripts/zshlang/plugins/agent-session`.
+Local provider resume helpers call its argument builder; transcript discovery,
+profile lookup, live-session checks and pickers remain in the local shell layer.
+Standalone consumers source the plugin directly, without the full basic stack.
+The skill resolves `AGENT_SESSION_PLUGIN` (or `--plugin`), falling back to the
+local scripts checkout. Missing dependencies fail before a session is created.
+
+The launch interface requires `--resume-command` shell code, normally calling
+`agent-session-resume-exact PROVIDER "$AGENT_SESSION_ID" "$AGENT_SESSION_CWD"
+LAUNCHER [ARGS...]`. Explicit commands preserve wrapper configuration without
+trying to infer which arbitrary shell arguments are the original prompt.
+Provider/profile/model/permission arguments must match the launch intent;
+notification arguments are persisted and appended automatically on resume.
+
+Each pane has an owner-only state directory with launch context, hook arguments,
+identity and a first-launch marker. Its path is recorded in the registry and the
+pane option `@agent_session_state`. Claude SessionStart, Codex notify, local
+identity hooks and explicit child registration can record the exact ID. A second
+ID is rejected. Child registration before work is required, especially for
+standalone Codex and agy where no portable startup hook is wired. Parent
+conversation-ID environment variables are cleared before launching the child.
+
+The pane command takes a file lock, inherited across shell execution, then runs
+the initial command once or the saved resume command thereafter. Restart waits
+up to five seconds for the previous process lock; a remaining holder produces a
+visible error. Missing identity or resume context never falls back to a fresh
+conversation. The lock covers this managed pane, not unrelated external
+launchers. Existing sessions are not renamed or rewritten.
+
+Local `/done` reports retain their existing transcript resume line for picker
+compatibility, and carry the managed state separately. The local resume wrapper
+checks that the requested transcript matches that state before restoring the
+saved command. Explicit `agent_done_resume_cmd` overrides keep their behavior.
+
+Validation: `python3 -m unittest discover -s tests -v` uses fake providers on
+private tmux sockets, including running and dead-pane restarts, repeated resume,
+profile/cwd retention, naming, collisions, identity mismatch and process locking.
+These checks do not make provider API calls; installed CLI help establishes the
+resume syntax, while real-provider authentication and TUI behavior are not
+exercised by the fake-provider suite.

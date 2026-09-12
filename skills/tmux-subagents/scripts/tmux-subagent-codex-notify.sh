@@ -15,7 +15,13 @@ umask 077
 task="$1"; node="$2"; shift 2
 eval "payload=\${$#}"
 here=$(cd "$(dirname "$0")" && pwd)
-"$here/tmux-subagent-status.sh" "$task" "$node" turn_end "$payload" || true
+# Capture the full identity before the status helper truncates the payload.
+if [ -n "${AGENT_SESSION_STATE:-}" ] && [ -n "${AGENT_SESSION_PLUGIN:-}" ]; then
+  printf '%s' "$payload" | python3 "${AGENT_SESSION_PLUGIN%/*}/pane.py" hook "$AGENT_SESSION_STATE" codex || true
+fi
+if [ -n "$task" ]; then
+  "$here/tmux-subagent-status.sh" "$task" "$node" turn_end "$payload" || true
+fi
 [ $# -le 1 ] && exit 0
 # drop the trailing payload, keep the chain command
 n=$(( $# - 1 )); i=1
