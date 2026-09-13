@@ -345,6 +345,19 @@ restarting an agent that may still be working.
 
 ## Ownership and follow-ups
 
+**Suggested prompts are not pending messages.** Plain `capture-pane -p` loses
+this distinction. For Claude Code, use `tmux capture-pane -p -e -t "$pane_id"`
+and `tmux display-message -p -t "$pane_id" '#{cursor_x},#{cursor_y}'`: dim/gray
+prompt text with the cursor before it is evidence of a generated suggestion
+(observed: ANSI SGR 2, cursor immediately after `❯ `), not typed input or author
+approval. [Claude documents](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions)
+Tab/Right to accept a suggestion and typing to dismiss it. Styling/cursor checks
+are harness-specific heuristics, not a portable input-buffer API; if ambiguous,
+report unknown and send no keys. Never press Enter/Tab to test the distinction
+or execute a suggestion as an instruction. For new automated Claude sessions,
+session-local `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` avoids this ambiguity;
+do not change the user's global settings.
+
 Confirm ownership and input readiness before dispatching a follow-up with a
 fresh task ID and result path. Ownership is an explicit registry field, changed
 only on explicit hand-back; detachment or elapsed time grants nothing back.
@@ -542,4 +555,3 @@ wherever the local commands named there are absent.
 The repository README covers installation, `docs/design.md` records pending
 automation, `docs/related-projects.md` evaluated integrations; optional
 maintainer background, not needed to use the installed skill.
-
