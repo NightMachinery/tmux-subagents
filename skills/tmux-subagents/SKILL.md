@@ -259,6 +259,8 @@ non-zsh child reports nothing, so detect them with `zsh -c 'whence -w claude-m
 codex-m claude-work'`. Where a wrapper is absent, fall back to the bare `claude`
 / `codex` and supply what it would have added: `CLAUDE_CONFIG_DIR=<dir> claude
 ...` for a profile, plus the permission, approval and sandbox flags above.
+Add `--prompt-suggestions false` to every Claude launch, wrapper or bare, for
+the reason under Ownership and follow-ups below.
 Record the resolved launcher in the launch metadata and have the brief point at
 it.
 
@@ -348,18 +350,27 @@ restarting an agent that may still be working.
 
 ## Ownership and follow-ups
 
-**Suggested prompts are not pending messages.** Plain `capture-pane -p` loses
-this distinction. For Claude Code, use `tmux capture-pane -p -e -t "$pane_id"`
-and `tmux display-message -p -t "$pane_id" '#{cursor_x},#{cursor_y}'`: dim/gray
-prompt text with the cursor before it is evidence of a generated suggestion
-(observed: ANSI SGR 2, cursor immediately after `❯ `), not typed input or author
-approval. [Claude documents](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions)
-Tab/Right to accept a suggestion and typing to dismiss it. Styling/cursor checks
-are harness-specific heuristics, not a portable input-buffer API; if ambiguous,
-report unknown and send no keys. Never press Enter/Tab to test the distinction
-or execute a suggestion as an instruction. For new automated Claude sessions,
-session-local `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` avoids this ambiguity;
-do not change the user's global settings.
+**Suggested prompts are not pending messages.** A Claude Code pane can show
+generated prompt text that nobody typed, and treating it as a pending user
+message is how an agent ends up executing a suggestion as an instruction.
+
+For sessions you launch, remove the ambiguity at the source: pass
+`--prompt-suggestions false`. It supersedes the session-local
+`CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` env var the earlier workaround
+used. Verified on Claude Code 2.1.273; it validates its argument against
+true/false/1/0/yes/no/on/off, so a typo fails loudly instead of being silently
+ignored. Never change the user's global settings to achieve this.
+
+Screen-reading is then only needed for panes you did not launch, where plain
+`capture-pane -p` loses the distinction. Use `tmux capture-pane -p -e -t
+"$pane_id"` and `tmux display-message -p -t "$pane_id" '#{cursor_x},#{cursor_y}'`:
+dim/gray prompt text with the cursor before it is evidence of a generated
+suggestion (observed: ANSI SGR 2, cursor immediately after `❯ `), not typed
+input or author approval. [Claude documents](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions)
+Tab/Right to accept a suggestion and typing to dismiss it. These styling and
+cursor checks are harness-specific heuristics, not a portable input-buffer API;
+if ambiguous, report unknown and send no keys. Never press Enter/Tab to test the
+distinction.
 
 Confirm ownership and input readiness before dispatching a follow-up with a
 fresh task ID and result path. Ownership is an explicit registry field, changed
