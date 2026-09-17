@@ -190,15 +190,15 @@ ownership rules. Missing identity or a process still holding the pane lock gives
 a visible error, never a new session or a most-recent-session fallback. Leave
 existing panes alone; they keep their original commands.
 
-Launch under an interactive zsh, as the managed pane runner does. tmux's
+Launch under an explicit zsh, as the managed pane runner does: tmux's
 `default-shell` may be something else entirely (`/bin/dash` on the author's
-machine), so a pane without an explicit zsh sees neither the user's shell
-functions nor environment. Use `-i` here specifically, against the general rule
-that `zsh -c` is the right non-interactive form: this pane is a user-facing
-shell hosting a full-screen TUI, so it wants job control and interactive signal
-handling. Because an interactive zsh `cd`s during startup, `tmux new-session -c
-DIR` alone does not put the child in the right tree. Confirm the working
-directory from the pane.
+machine), so a pane without one sees neither the user's shell functions nor
+environment. Use `zsh -c`, not `zsh -ic`. A full-screen TUI does not need job
+control: verified in a pane that `zsh -c 'less <file>'` renders and that
+keystrokes reach it. `zsh -c` also inherits the caller's directory, so `tmux
+new-session -c DIR` puts the child where you asked; an interactive zsh instead
+`cd`s away during startup and would need `ZSH_PWD=MAGIC_KEEP_CURRENT` to
+suppress that. Confirm the working directory from the pane regardless.
 
 Pass the permission flag explicitly in every launch command, then confirm it in
 the pane; a child inherits no usable posture. Verified 2026-09-09 (Claude Code
