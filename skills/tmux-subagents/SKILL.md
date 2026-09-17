@@ -190,12 +190,15 @@ ownership rules. Missing identity or a process still holding the pane lock gives
 a visible error, never a new session or a most-recent-session fallback. Leave
 existing panes alone; they keep their original commands.
 
-Launch under an interactive zsh, as the managed pane runner does, for two reasons: tmux's `default-shell`
-may be something else entirely (`/bin/dash` on the author's machine), so a pane
-without an explicit `zsh -ic` sees neither the user's shell functions nor
-environment; and an interactive zsh may `cd` during startup, so `tmux
-new-session -c DIR` alone does not put the child in the right tree. Confirm the
-working directory from the pane.
+Launch under an interactive zsh, as the managed pane runner does. tmux's
+`default-shell` may be something else entirely (`/bin/dash` on the author's
+machine), so a pane without an explicit zsh sees neither the user's shell
+functions nor environment. Use `-i` here specifically, against the general rule
+that `zsh -c` is the right non-interactive form: this pane is a user-facing
+shell hosting a full-screen TUI, so it wants job control and interactive signal
+handling. Because an interactive zsh `cd`s during startup, `tmux new-session -c
+DIR` alone does not put the child in the right tree. Confirm the working
+directory from the pane.
 
 Pass the permission flag explicitly in every launch command, then confirm it in
 the pane; a child inherits no usable posture. Verified 2026-09-09 (Claude Code
@@ -252,7 +255,7 @@ preferred launchers are the zsh wrappers `claude-m` (default Claude profile),
 `codex-m` (local sandbox and approval options; verified 2026-09-09 across four
 launches to open with a directory-trust question before the prompt runs). They
 are shell functions, not executables: `command -v` from a bash launcher or a
-non-zsh child reports nothing, so detect them with `zsh -ic 'whence -w claude-m
+non-zsh child reports nothing, so detect them with `zsh -c 'whence -w claude-m
 codex-m claude-work'`. Where a wrapper is absent, fall back to the bare `claude`
 / `codex` and supply what it would have added: `CLAUDE_CONFIG_DIR=<dir> claude
 ...` for a profile, plus the permission, approval and sandbox flags above.
