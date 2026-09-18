@@ -138,7 +138,11 @@ same directory, as the launch helper does; an append-only log cannot support
 safe removal, and follow-up dispatch and cleanup take the same lock.
 
 The helper stores one entry per launch (identity, lineage, task ID, workdir,
-socket, session and pane IDs, `created`, `process_state: running`,
+socket, session and pane IDs, the resolved launcher token, the `--model` value
+parsed from the launch command as `requested_model`, an empty `observed_model`
+placeholder, `notify` (`hook` when a turn-end/status hook is wired at launch,
+`file-only` when it is not — agy today; a separate question from the
+push-channel choice in Notifications), `created`, `process_state: running`,
 `task_outcome: unknown`); the rest is manual. Two consequences, both seen
 2026-09-09: `process_state` is never updated at session end and read `running`
 for two finished Codex sessions, so take liveness from the pane or the status
@@ -237,7 +241,13 @@ confirm" (verified 2026-09-09, Claude Code 2.1.266; the `-p` path never shows
 it). Its default is "No, exit", so a bare Enter kills the child: capture the
 pane, wait until "Enter to confirm" is rendered, then send `tmux send-keys -t
 "$pane_id" Down` and `Enter` separately, since keys sent before the prompt
-renders are lost or land on the default. Read every prompt before answering: a
+renders are lost or land on the default. agy shows the same kind of one-time
+prompt, "Do you trust the contents of this project? ... Yes, I trust this
+folder / No, exit", but with the opposite default: "Yes, I trust this folder"
+is already highlighted (verified 2026-09-18, Antigravity CLI 1.2.6), so a bare
+Enter accepts it. `--dangerously-skip-permissions` does not suppress this
+prompt; it only removes per-action tool-permission prompts once the session is
+running. Read every prompt before answering: a
 wrapper whose instruction-file sync failed instead asks "Launch anyway, with
 possibly stale instructions?", which also defaults to No. Answer only within the
 existing authorization, then verify the task started; a created tmux session
@@ -294,7 +304,13 @@ queue --thread ID --message TEXT`, evaluate it as a follow-up transport
 **Google Antigravity (agy).** Launch Google's `agy` executable, or the local
 launcher for it, using its own account configuration; do not substitute the
 separate `gemini` CLI, invent an `agy --profile` flag, or assume Claude/Codex
-profile variables apply.
+profile variables apply. agy has no auto-approve permission mode the way
+Claude's `--permission-mode auto` or Codex's `--approve-for-me` give
+(`--mode accept-edits` still confirms destructive actions); its only unattended
+posture is `--dangerously-skip-permissions`, and the user authorized launching
+unattended agy children with it on 2026-09-18. Pass it explicitly in every
+unattended launch and confirm it in the pane, the same discipline as the
+permission flag for the other two providers (Launch and inspect).
 
 *Model policy.* Resolve Gemini Flash Latest through `agy models` in the selected
 profile at launch, unless the user explicitly requested Pro for that child or
@@ -302,30 +318,79 @@ its subtree. A Pro parent does not make its children Pro, and difficulty, quota
 failures, or an unavailable Flash model never justify an upgrade. Choose the
 newest version inside the requested family and pass its exact slug to `--model`;
 literal `gemini-flash-latest` aliases are not assumed to work, and Flash-Lite,
-another family, or a non-Gemini model is a different choice. Honor a requested
-effort and verify supported values against `agy --help`. If family or effort
-cannot be resolved, report that instead of substituting. Record policy and exact
-slug in metadata, keep the sanitized model in the session name, and keep today's
-version out of defaults.
+another family, or a non-Gemini model is a different choice. `agy models`
+prints exact slugs, not aliases; verified 2026-09-18 it printed (illustrative
+only, never hardcode as a default): `gemini-3.8-flash-high`,
+`gemini-3.8-flash-medium`, `gemini-3.8-flash-low`, `gemini-3.7-flash-high`,
+`gemini-3.7-flash-medium`, `gemini-3.7-flash-low`, `gemini-3.6-flash-high`,
+`gemini-3.6-flash-medium`, `gemini-3.6-flash-low`, `gemini-3.1-pro-high`,
+`gemini-3.1-pro-low`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`,
+`gpt-oss-120b-medium`. Re-run `agy models` at launch time rather than reusing
+this list, since a newer Flash generation replaces it and the newest slug in
+the requested family is always the one to pass. Honor a requested effort and
+verify supported values against `agy --help`: a separate `--effort
+low|medium|high` flag exists alongside effort already baked into some slugs
+(the `-high`/`-medium`/`-low` suffix above), so check which the selected model
+expects before assuming both apply. If family or effort cannot be resolved,
+report that instead of substituting. Record policy and exact slug in metadata,
+keep the sanitized model in the session name, and keep today's version out of
+defaults.
 
-*Interactive launch and resume.* Start the initial turn inside the owned session
-with `agy --model "$resolved_model" --prompt-interactive "$initial_prompt"`,
-where a sensitive prompt points at the private brief instead of containing it.
-`--prompt-interactive` keeps the session interactive; `--print` and `--prompt`
-are headless. Resume with `agy --conversation "$conversation_id"` under its
-owning profile, never `--continue`, which can select another agent's most recent
-conversation. With no verified message-queue interface, follow-ups go through
-the ownership rules.
+*Interactive launch and resume.* Start the initial turn inside the owned
+session with, for example:
+
+    zsh -c 'agy --model gemini-3.8-flash-low --dangerously-skip-permissions --prompt-interactive "Read /abs/path/brief.md and carry it out"'
+
+substituting the resolved slug for `gemini-3.8-flash-low`, and pointing at the
+private brief instead of putting sensitive text on the command line (Prepare a
+delegation). `--prompt-interactive` keeps the session interactive; `--print`
+and `--prompt` are headless. Resume under the same profile with:
+
+    agent-session-resume-exact agy "$AGENT_SESSION_ID" "$AGENT_SESSION_CWD" agy --model "$resolved_model" --dangerously-skip-permissions
+
+never `--continue`, which can select another agent's most recent conversation.
+agy children are file-only for notifications, with or without
+`--dangerously-skip-permissions`: there is no agy equivalent of Claude's
+`ListAgents`/`SendMessage`, so a same-account agy parent and child still
+communicate only through the result file and `tmux-subagent-wait.sh`
+(Notifications). With no verified message-queue interface, follow-ups go
+through the ownership rules.
+
+Verified end-to-end 2026-09-18 with a throwaway `gemini-3.8-flash-low` child in
+a scratch directory: `tmux-subagent-launch.sh --provider agy` produced a
+`provider: "agy"` registry entry, the child answered the one-time trust prompt
+with a bare Enter, ran `tmux-subagent-register.sh agy` itself unprompted, wrote
+its result file, and `identity.json` under the entry's `resume_state` held its
+real conversation ID with no manual intervention. That run predated the fix
+that makes `launcher`/`requested_model` see through a `zsh -c '...'` wrapper
+(the entry recorded `launcher: "zsh"`, `requested_model: ""`); re-running the
+fixed extraction against that exact stored command afterward recovered `agy`
+and `gemini-3.8-flash-low`, so the metadata fields are covered without another
+live child. `tmux-subagent-register.sh agy` was also unit-tested on its own,
+with a fake `ANTIGRAVITY_CONVERSATION_ID` exported in a bare tmux pane and no
+agy process involved: `identity.json` came out matching provider, ID and an
+empty transcript, confirming the capture path independent of agy's own quota or
+availability. One operational pitfall the same session hit while closing that
+child: tmux session IDs look like `$661`, and typing one as `"$661"` in bash is
+not a literal, it is `${6}` (an empty positional parameter) followed by `61`,
+so the kill silently targets the wrong (usually nonexistent) session and the
+real one keeps running. Single-quote a captured `$N`/`@N`/`%N` id, or hold it
+in a named shell variable, never interpolate it bare in double quotes (Cleanup
+verifies by PID for the same class of reason).
 
 **Skill loading.** Put this skill in the provider's discovery location and its
 absolute path in every child brief, so a child can still read it when discovery
 fails. Claude Code and Codex read `~/.agents/skills` (symlinked skill
 directories work; optional `agents/openai.yaml` metadata is Codex's and must not
 be required by the shared file). AGY CLI reads
-`~/.gemini/antigravity-cli/skills/`: expose this file there as
-`tmux-subagents.md` and verify `/tmux-subagents` in the installed CLI. That CLI
-path differs from the Antigravity app's, so an installer target for the app does
-not configure agy. Keep frontmatter portable: Claude-specific substitutions,
+`~/.gemini/config/skills/<name>/SKILL.md`, the same per-skill-subdirectory shape
+as `~/.agents/skills`, and a symlinked `SKILL.md` works the same way; verified
+2026-09-18 by putting `~/.gemini/config/skills/tmux-subagents/SKILL.md` as a
+symlink to this file and getting a non-tool `agy -p` turn to name the skill and
+echo its frontmatter description verbatim. `~/.gemini/antigravity-cli/` is CLI
+runtime state (cache, logs, conversation DB), not a skills directory, and an
+installer target for the separate Antigravity app does not configure the agy
+CLI either way. Keep frontmatter portable: Claude-specific substitutions,
 `context: fork`, and tool-permission fields must not redefine the workflow.
 
 ## Results
