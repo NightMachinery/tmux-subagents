@@ -38,6 +38,33 @@ def write_json(path, data):
             os.unlink(tmp)
 
 
+def requested_model(command):
+    # Best-effort, provider-agnostic: Claude, Codex and agy all take --model.
+    # Matched against the raw text, not a single shlex pass, because the
+    # documented agy shape nests the real invocation inside a shell -c
+    # script (`zsh -c 'agy --model ... --prompt-interactive "..."'`), where
+    # shlex.split(command) sees the whole quoted script as one opaque token
+    # and never recovers the words inside it.
+    found = re.search(r'--model[= ]+([^\s\'"]+)', command)
+    return found.group(1) if found else ''
+
+
+PROVIDER_ALIASES = {'claude': ('claude', 'claude-m', 'claude-work'),
+                     'codex': ('codex', 'codex-m'),
+                     'agy': ('agy', 'antigravity', 'antigravity-m')}
+
+
+def provider_launcher(command, provider, fallback):
+    # Prefer a known binary name for the resolved provider found anywhere in
+    # the raw command text over the outer shell word, for the same nested
+    # `zsh -c '...'` reason as requested_model above: a single-level
+    # tokenizer only ever sees `zsh`, never the `agy` inside its script.
+    for name in PROVIDER_ALIASES.get(provider, ()):
+        if re.search(r'(?<![\w./-])' + re.escape(name) + r'(?![\w-])', command):
+            return name
+    return fallback
+
+
 def launcher_token(command, requested=None):
     # Preserve shell source verbatim; identify one whole launcher token, never
     # a matching substring in a path, prompt or environment assignment.
@@ -114,6 +141,21 @@ def main():
     elif provider == 'codex':
         notify = [str(HERE / 'tmux-subagent-codex-notify.sh'), args.task, args.name, *args.notify_chain]
         hooks = ['-c', 'notify=' + json.dumps(notify, separators=(',', ':'))]
+    elif provider == 'agy':
+        # agy's Stop/SessionStart/PreInvocation hooks live in one global
+        # ~/.gemini/config/hooks.json (or a plugin's own hooks.json); there is
+        # no --settings/-c-style flag to scope a hook to a single invocation.
+        # Wiring one here would mean mutating shared user config instead of
+        # passing it on the command line (the principle every other provider
+        # follows in this launcher), and it would race concurrent agy
+        # children. agy children are therefore file-only for the turn-end
+        # status log; `notify` below records that, and Notifications
+        # (SKILL.md) covers the separate question of the parent's push
+        # channel, which is file-only for agy regardless.
+        hooks = []
+    notify = 'file-only' if provider == 'agy' else 'hook'
+    model = requested_model(args.command)
+    launcher = provider_launcher(args.command, provider, word)
     initial = args.command
     if hooks:
         if not word or not launcher_end:
@@ -127,7 +169,8 @@ def main():
                        TMUX_SUBAGENT_TASK=args.task, TMUX_SUBAGENT_NODE=args.name,
                        TMUX_SUBAGENT_LINEAGE=args.lineage, TMUX_SUBAGENT_RUN=args.run)
     write_json(state / 'launch.json', dict(provider=provider, cwd=cwd, initial=initial,
-                                         resume=args.resume_command, environment=environment))
+                                         resume=args.resume_command, environment=environment,
+                                         launcher=launcher, requested_model=model, notify=notify))
     write_json(state / 'hooks.json', hooks)
     made = tmux('new-session', '-d', '-P', '-F', '#{session_id} #{pane_id}', '-s', args.name,
                 '-c', cwd, 'sh', '-c', 'exec sleep 2147483647', check=False)
@@ -144,6 +187,7 @@ def main():
     entry = dict(node_id=args.name, root_id=os.environ.get('TMUX_SUBAGENT_ROOT') or args.name,
                  parent=os.environ.get('TMUX_SUBAGENT_PARENT', ''), task_id=args.task,
                  lineage=args.lineage, run=args.run, provider=provider,
+                 launcher=launcher, requested_model=model, observed_model='', notify=notify,
                  tmux_session_id=sid, tmux_pane_id=pane, tmux_socket=sock, workdir=cwd,
                  resume_state=str(state), created=time.strftime('%Y-%m-%dT%H:%M:%S'),
                  process_state='running', task_outcome='unknown')
