@@ -426,12 +426,17 @@ restarting an agent that may still be working.
 generated prompt text that nobody typed, and treating it as a pending user
 message is how an agent ends up executing a suggestion as an instruction.
 
-For sessions you launch, remove the ambiguity at the source: pass
-`--prompt-suggestions false`. It supersedes the session-local
-`CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` env var the earlier workaround
-used. Verified on Claude Code 2.1.273; it validates its argument against
-true/false/1/0/yes/no/on/off, so a typo fails loudly instead of being silently
-ignored. Never change the user's global settings to achieve this.
+For sessions you launch, still pass `--prompt-suggestions false`, but do not
+rely on it: on Claude Code 2.1.273 the flag is accepted (it validates its
+argument against true/false/1/0/yes/no/on/off) yet four interactive children
+launched with it on 2026-09-18 still rendered suggestions after `❯` once a turn
+ended; `claude --help` describes the flag in terms of print/SDK mode. It
+supersedes the session-local `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` env
+var the earlier workaround used, and neither is known to silence the TUI.
+Treat every pane as one that may show a suggestion (next paragraph), and when
+dispatching a follow-up send the text and ONE Enter: typing replaces a ghost
+suggestion, but a bare Enter on an idle prompt could submit one. Never change
+the user's global settings to achieve this.
 
 Screen-reading is then only needed for panes you did not launch, where plain
 `capture-pane -p` loses the distinction. Use `tmux capture-pane -p -e -t
