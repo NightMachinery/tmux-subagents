@@ -194,6 +194,13 @@ ownership rules. Missing identity or a process still holding the pane lock gives
 a visible error, never a new session or a most-recent-session fallback. Leave
 existing panes alone; they keep their original commands.
 
+**Local inspection command (example).** Machine-specific, in the same register
+as the cleanup commands under Cleanup: on the author's machine
+`subagents-of-fz [-r] [AGENT]` picks one agent that has launched children --
+from `parent` and `lineage`, which is the only place that parentage is recorded
+-- and then one of that agent's children to go to, read-only with `ctrl-r`.
+Where it is absent, read the registry directly.
+
 Launch under an explicit zsh, as the managed pane runner does: tmux's
 `default-shell` may be something else entirely (`/bin/dash` on the author's
 machine), so a pane without one sees neither the user's shell functions nor
