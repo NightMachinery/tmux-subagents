@@ -13,9 +13,10 @@
 # Why each step:
 # - The text goes with `send-keys -l`, so words like Enter or C-c are typed,
 #   not read as key names, in chunks, since tmux refuses one oversized command.
-# - The submit is a separate `C-m` about 1.5 s later. Claude Code reads a long
-#   burst of keystrokes as a paste and swallows an Enter that arrives inside it;
-#   on 2026-09-23 an approval sat unsent in a child's input box that way.
+# - The submit is a separate `C-m` about 1.5 s later, then verified. A typed
+#   follow-up has been seen to sit unsubmitted in a child's input box (once,
+#   while a user was attached to that pane); the cause is unconfirmed. Checking
+#   the input line and retrying `C-m` once makes the cause irrelevant to callers.
 # - The check reads `capture-pane -e`: the input line is the last line starting
 #   with `❯` that is not a menu item (`❯ 1. Yes`), plus its continuation lines
 #   up to the box's bottom rule. Dim text (ESC[2m) there is Claude Code's prompt
