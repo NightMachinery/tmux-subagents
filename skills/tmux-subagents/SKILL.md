@@ -213,7 +213,7 @@ suppress that. Confirm the working directory from the pane regardless.
 
 Pass the permission flag explicitly in every launch command, then confirm it in
 the pane; a child inherits no usable posture. Verified 2026-09-09 (Claude Code
-2.1.266) on this machine: both Claude profiles default to `"defaultMode":
+2.1.266) on the author's machine: both Claude profiles default to `"defaultMode":
 "plan"`, so a bare `claude-m` child cannot write until someone approves a plan,
 while an interactive child started with `--permission-mode auto` in an
 already-trusted directory shows `auto mode on` in its status line on either
@@ -326,15 +326,9 @@ failures, or an unavailable Flash model never justify an upgrade. Choose the
 newest version inside the requested family and pass its exact slug to `--model`;
 literal `gemini-flash-latest` aliases are not assumed to work, and Flash-Lite,
 another family, or a non-Gemini model is a different choice. `agy models`
-prints exact slugs, not aliases; verified 2026-09-18 it printed (illustrative
-only, never hardcode as a default): `gemini-3.8-flash-high`,
-`gemini-3.8-flash-medium`, `gemini-3.8-flash-low`, `gemini-3.7-flash-high`,
-`gemini-3.7-flash-medium`, `gemini-3.7-flash-low`, `gemini-3.6-flash-high`,
-`gemini-3.6-flash-medium`, `gemini-3.6-flash-low`, `gemini-3.1-pro-high`,
-`gemini-3.1-pro-low`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`,
-`gpt-oss-120b-medium`. Re-run `agy models` at launch time rather than reusing
-this list, since a newer Flash generation replaces it and the newest slug in
-the requested family is always the one to pass. Honor a requested effort and
+prints exact slugs, not aliases (for example `gemini-3.8-flash-low`,
+`gemini-3.1-pro-high`); re-run it at launch rather than reusing any list, since
+the newest slug in the requested family is always the one to pass. Honor a requested effort and
 verify supported values against `agy --help`: a separate `--effort
 low|medium|high` flag exists alongside effort already baked into some slugs
 (the `-high`/`-medium`/`-low` suffix above), so check which the selected model
@@ -363,27 +357,11 @@ communicate only through the result file and `tmux-subagent-wait.sh`
 (Notifications). With no verified message-queue interface, follow-ups go
 through the ownership rules.
 
-Verified end-to-end 2026-09-18 with a throwaway `gemini-3.8-flash-low` child in
-a scratch directory: `tmux-subagent-launch.sh --provider agy` produced a
-`provider: "agy"` registry entry, the child answered the one-time trust prompt
-with a bare Enter, ran `tmux-subagent-register.sh agy` itself unprompted, wrote
-its result file, and `identity.json` under the entry's `resume_state` held its
-real conversation ID with no manual intervention. That run predated the fix
-that makes `launcher`/`requested_model` see through a `zsh -c '...'` wrapper
-(the entry recorded `launcher: "zsh"`, `requested_model: ""`); re-running the
-fixed extraction against that exact stored command afterward recovered `agy`
-and `gemini-3.8-flash-low`, so the metadata fields are covered without another
-live child. `tmux-subagent-register.sh agy` was also unit-tested on its own,
-with a fake `ANTIGRAVITY_CONVERSATION_ID` exported in a bare tmux pane and no
-agy process involved: `identity.json` came out matching provider, ID and an
-empty transcript, confirming the capture path independent of agy's own quota or
-availability. One operational pitfall the same session hit while closing that
-child: tmux session IDs look like `$661`, and typing one as `"$661"` in bash is
-not a literal, it is `${6}` (an empty positional parameter) followed by `61`,
-so the kill silently targets the wrong (usually nonexistent) session and the
-real one keeps running. Single-quote a captured `$N`/`@N`/`%N` id, or hold it
-in a named shell variable, never interpolate it bare in double quotes (Cleanup
-verifies by PID for the same class of reason).
+Verified end-to-end 2026-09-18 with a throwaway Flash child: the launch helper
+with `--provider agy` recorded a complete registry entry, the child accepted the
+trust prompt with a bare Enter, registered itself unprompted and wrote its
+result file. Single-quote captured tmux ids: in double quotes `"$661"` expands
+`${6}` followed by `61`, and a kill silently targets the wrong session.
 
 **Skill loading.** Put this skill in the provider's discovery location and its
 absolute path in every child brief, so a child can still read it when discovery
@@ -422,51 +400,29 @@ restarting an agent that may still be working.
 
 ## Ownership and follow-ups
 
-**Suggested prompts are not pending messages.** A Claude Code pane can show
-generated prompt text that nobody typed, and treating it as a pending user
-message is how an agent ends up executing a suggestion as an instruction.
+Confirm ownership before dispatching a follow-up with a fresh task ID and result
+path. Ownership is an explicit registry field, changed only on explicit
+hand-back; detachment or elapsed time grants nothing back. While the user owns
+a child, the parent queues follow-ups and does not inject input, interrupt it,
+resume another copy of its conversation, or close it. The convention needs
+cooperation: nothing stops typing into a raw tmux pane.
 
-For sessions you launch, still pass `--prompt-suggestions false`, but do not
-rely on it: on Claude Code 2.1.273 the flag is accepted (it validates its
-argument against true/false/1/0/yes/no/on/off) yet four interactive children
-launched with it on 2026-09-18 still rendered suggestions after `❯` once a turn
-ended; `claude --help` describes the flag in terms of print/SDK mode. It
-supersedes the session-local `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` env
-var the earlier workaround used, and neither is known to silence the TUI.
-Treat every pane as one that may show a suggestion (next paragraph), and when
-dispatching a follow-up send the text and ONE Enter: typing replaces a ghost
-suggestion, but a bare Enter on an idle prompt could submit one. Never change
-the user's global settings to achieve this.
+Prefer verified provider delivery (`SendMessage`, same Claude profile only).
+Otherwise send follow-ups with `scripts/tmux-subagent-send.sh` (Scripts). Its
+one-line status is the delivery check: do not also read the pane for every
+message, and let the periodic supervision ping catch strays. It reaches a busy
+Claude child, whose TUI queues typed text, and refuses a permission or trust
+menu or text someone is already typing. It recognizes Claude Code's `❯` input
+box; for another TUI it refuses rather than guess, so extend it instead of
+typing by hand. The ownership check and the send happen under the registry
+lock, which is also held before closing anything selected from an older list.
 
-Screen-reading is then only needed for panes you did not launch, where plain
-`capture-pane -p` loses the distinction. Use `tmux capture-pane -p -e -t
-"$pane_id"` and `tmux display-message -p -t "$pane_id" '#{cursor_x},#{cursor_y}'`:
-dim/gray prompt text with the cursor before it is evidence of a generated
-suggestion (observed: ANSI SGR 2, cursor immediately after `❯ `), not typed
-input or author approval. [Claude documents](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions)
-Tab/Right to accept a suggestion and typing to dismiss it. These styling and
-cursor checks are harness-specific heuristics, not a portable input-buffer API;
-if ambiguous, report unknown and send no keys. Never press Enter/Tab to test the
-distinction.
-
-Confirm ownership and input readiness before dispatching a follow-up with a
-fresh task ID and result path. Ownership is an explicit registry field, changed
-only on explicit hand-back; detachment or elapsed time grants nothing back.
-While the user owns a child, the parent queues follow-ups and does not inject
-input, interrupt it, resume another copy of its conversation, or close it. The
-convention needs cooperation: nothing stops typing into a raw tmux pane.
-
-Prefer verified provider message delivery over keystrokes. Where only the
-terminal is available, send literal text with `tmux send-keys -t "$pane_id" -l
--- "$text"` and Enter separately, after confirming readiness from the pane;
-`send-keys -l` reaches a busy Claude child, whose TUI queues typed text
-(verified 2026-09-09). Send typed follow-ups to a Claude child with
-`scripts/tmux-subagent-send.sh` (Scripts), which submits with a separate `C-m`.
-Do not hand-check each message by reading the pane: its one-line status is the
-check, and a periodic supervision ping catches strays. Never paste into an unknown permission modal or while the
-user is typing. Automated check-then-send races: ownership check and delivery
-happen under the registry lock, which is also held before closing anything
-selected from an older list.
+**Suggested prompts are not pending messages.** A Claude Code pane can show dim
+generated text after `❯` that nobody typed. Never treat it as a user message
+or approval, and never press Enter or Tab on an idle prompt, which could submit
+or accept it. `--prompt-suggestions false` does not silence the interactive TUI
+(Claude Code 2.1.273); pass it anyway, and never change the user's global
+settings to suppress suggestions.
 
 ## Notifications
 
@@ -485,19 +441,12 @@ helper into a scratch directory, briefed by file to log every
   and wakes an idle parent as a new turn. After launch and after every follow-up
   the parent calls `SendMessage(to: <child>, notify_when_idle: true)`; one
   `[Cross-session idle notice]` arrives at the child's next turn end even if it
-  forgot to report, and idle is not completion. Measured work -> work
-  (`claude-work --name msgP` and `--name msgC`): visibility both ways, the
-  child's message woke the idle parent, and `[Cross-session idle notice] "msgC"
-  ... is idle now` arrived at its turn end.
+  forgot to report, and idle is not completion.
 - **Claude child, other profile**: sessions under different `CLAUDE_CONFIG_DIR`
   values do not list each other and `SendMessage` fails in both directions,
-  although the sockets share one directory. Measured default -> work (`claude
-  --name msgD`, same cwd): `ListAgents` showed only default-profile peers and
-  `SendMessage(to:"msgP")` returned `{"success":false,"message":"No agent named
-  'msgP' is reachable..."}`; work -> default: `SendMessage(to:"msgD")` returned
-  "No agent named 'msgD' is reachable. Did you mean: msgC?", and a separate
-  coordinator saw the same for its own pair. No idle notice can be armed either
-  way. Treat such a child as file-only, like Codex and agy.
+  although the sockets share one directory (measured both directions: "No
+  agent named ... is reachable"), and no idle notice can be armed. Treat such a
+  child as file-only, like Codex and agy.
 - **Codex, agy, or cross-profile child**: the brief requires the result file and
   the parent runs `"$skill_dir/scripts/tmux-subagent-wait.sh" RESULT PANE_ID` in
   the background (Claude Code: Bash with `run_in_background`, which turns the
@@ -506,7 +455,7 @@ helper into a scratch directory, briefed by file to log every
   check at the parent's next turn). One notification per assignment.
 - **Needs input**: a child that must ask publishes the needs-input file with the
   question and its default if unanswered; the waiter fires on it. The parent
-  answers by `SendMessage` or, under the ownership rules, through the terminal,
+  answers by `SendMessage` or, under the ownership rules, with the send helper,
   deletes the file, and re-arms the waiter.
 
 **Turn-end hooks.** Wire them per launch, on the command line, so no user config
@@ -535,6 +484,22 @@ was not tested). A parent with many children can `tail -f status.jsonl` filtered
 by task ID (Claude Code: Monitor) instead of one waiter each, provided that
 stream actually wakes it.
 
+**Supervising cheaply.** Wake the parent only on real events, from a zero-token
+shell watcher, not by reading panes:
+
+- Each child keeps a curated events log, one line per notable event written for
+  the parent; every new line is an event, debounced. The checkpoint is a
+  notebook, read on a periodic ping, never watched.
+- The watcher also checks what a child cannot log: a dead pane, and a real
+  permission or trust menu (the `❯ 1.` menu cursor, not merely its words).
+- Prefer a one-shot watcher, which exits on the first event and is re-armed by
+  the parent, where the host kills long-lived monitors on a timer and wakes the
+  parent to re-arm them. Re-arming never replays files or lines already seen.
+- When an alert fires, read the source log before replying; never acknowledge
+  it from the summary.
+- A permission dialog stalls a child without a turn-end event; the parent
+  answers it within the user's authorization.
+
 ## Coordinator handoff
 
 Before a coordinator stops, give its successor the shared registry path and, for
@@ -550,17 +515,15 @@ bind the plumbing here:
 - **`SendMessage` is a courtesy.** A child that only messages its parent has
   reported to nobody once that parent is compacted, out of quota, or replaced.
 - **Cross-profile children are file-only.** A successor on another profile
-  inherits them as result files plus `tmux send-keys -l`, so the old parent
+  inherits them as result files plus the send helper, so the old parent
   relays its own children's reports into the shared results directory first.
-- **An in-process child can move profiles.** Where the personal scripts
-  checkout is present, `claude-resume-subagent-work <agent-id>` (generally
-  `claude-code-subagent-resume <agent-id> <profile> [claude args...]`) copies
-  an Agent-tool child's sidechain transcript into a new top-level session and
-  resumes it; run it in a fresh tmux session, then talk to it with the send
-  helper. Only for a finished or stopped child whose parent will not
-  `SendMessage` it again, so two copies never act. The copy gets the
-  main-session system prompt and tools, and the launcher's default model unless
-  you pass `--model`. Verified 2026-09-23: a promoted child recalled its task.
+- **An in-process child can move profiles.** Local example: the author's
+  scripts provide `claude-code-subagent-resume <agent-id> <profile>`, which
+  copies an Agent-tool child's transcript into a new top-level session and
+  resumes it; run it in a fresh tmux session and use the send helper. Only for
+  a finished or stopped child whose parent will not `SendMessage` it again, so
+  two copies never act. The copy gets the main-session system prompt and tools,
+  and the launcher's default model unless given `--model`.
 
 ## Cleanup
 
@@ -646,16 +609,15 @@ directory to parent, child, and hooks.
 - `tmux-subagent-status.sh TASK_ID NODE_ID STATE [SUMMARY|-]` appends one status
   event, from a hook or directly for progress notes; `-` reads stdin, and both
   forms are truncated to 2000 characters.
-- `tmux-subagent-send.sh PANE_ID (--file PATH | -- TEXT)` types one follow-up
-  into a Claude child's idle input box, submits it, and prints one line:
-  `SENT` (exit 0), `NOT-SUBMITTED` (1, text still in the box after two `C-m`)
-  or `REFUSED` (2: a permission or trust modal, text someone is typing, a dead
-  pane). Verified 2026-09-23 with a short and an 82-line message.
+- `tmux-subagent-send.sh PANE_ID (--file PATH | -- TEXT)` sends one follow-up
+  to a Claude child and prints one line: `SENT` (exit 0), `NOT-SUBMITTED` (1)
+  or `REFUSED` (2: a menu, pre-typed text, an unknown TUI or a dead pane). Its
+  comments hold the submit mechanics.
 - `tmux-subagent-codex-notify.sh TASK_ID NODE_ID [CHAIN_CMD ARGS...] PAYLOAD`
   logs a Codex turn end and chains the user's own notify command.
 
 Status events publish no results and update no registry lifecycle state.
-Follow-up dispatch and ownership are manual. Closure follows Cleanup, by hand
+Ownership checks are manual. Closure follows Cleanup, by hand
 wherever the local commands named there are absent.
 
 ## References
