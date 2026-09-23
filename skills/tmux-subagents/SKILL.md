@@ -460,14 +460,10 @@ Prefer verified provider message delivery over keystrokes. Where only the
 terminal is available, send literal text with `tmux send-keys -t "$pane_id" -l
 -- "$text"` and Enter separately, after confirming readiness from the pane;
 `send-keys -l` reaches a busy Claude child, whose TUI queues typed text
-(verified 2026-09-09). "Separately" means a second `tmux send-keys -t
-"$pane_id" C-m` call, a second or two later, never a trailing `Enter` in the
-same call. Claude Code reads a long burst of keystrokes as a paste and
-swallows an Enter that arrives inside it. On 2026-09-23 a coordinator's
-approval sat unsent in a child's input box for minutes this way. Then confirm
-delivery: capture the pane and check that the `❯` input line is empty and the
-child is working. Dim text in the input box (`ESC[2m` under `capture-pane
--e`) is Claude Code's prompt suggestion, not typed input. Never paste into an unknown permission modal or while the
+(verified 2026-09-09). Send typed follow-ups to a Claude child with
+`scripts/tmux-subagent-send.sh` (Scripts), which submits with a separate `C-m`.
+Do not hand-check each message by reading the pane: its one-line status is the
+check, and a periodic supervision ping catches strays. Never paste into an unknown permission modal or while the
 user is typing. Automated check-then-send races: ownership check and delivery
 happen under the registry lock, which is also held before closing anything
 selected from an older list.
@@ -556,6 +552,15 @@ bind the plumbing here:
 - **Cross-profile children are file-only.** A successor on another profile
   inherits them as result files plus `tmux send-keys -l`, so the old parent
   relays its own children's reports into the shared results directory first.
+- **An in-process child can move profiles.** Where the personal scripts
+  checkout is present, `claude-resume-subagent-work <agent-id>` (generally
+  `claude-code-subagent-resume <agent-id> <profile> [claude args...]`) copies
+  an Agent-tool child's sidechain transcript into a new top-level session and
+  resumes it; run it in a fresh tmux session, then talk to it with the send
+  helper. Only for a finished or stopped child whose parent will not
+  `SendMessage` it again, so two copies never act. The copy gets the
+  main-session system prompt and tools, and the launcher's default model unless
+  you pass `--model`. Verified 2026-09-23: a promoted child recalled its task.
 
 ## Cleanup
 
@@ -641,6 +646,11 @@ directory to parent, child, and hooks.
 - `tmux-subagent-status.sh TASK_ID NODE_ID STATE [SUMMARY|-]` appends one status
   event, from a hook or directly for progress notes; `-` reads stdin, and both
   forms are truncated to 2000 characters.
+- `tmux-subagent-send.sh PANE_ID (--file PATH | -- TEXT)` types one follow-up
+  into a Claude child's idle input box, submits it, and prints one line:
+  `SENT` (exit 0), `NOT-SUBMITTED` (1, text still in the box after two `C-m`)
+  or `REFUSED` (2: a permission or trust modal, text someone is typing, a dead
+  pane). Verified 2026-09-23 with a short and an 82-line message.
 - `tmux-subagent-codex-notify.sh TASK_ID NODE_ID [CHAIN_CMD ARGS...] PAYLOAD`
   logs a Codex turn end and chains the user's own notify command.
 

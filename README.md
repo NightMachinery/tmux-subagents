@@ -9,8 +9,10 @@ provider and profile unless explicitly overridden.
 wires hooks, registers it, and prepares exact-conversation resume; `tmux-subagent-wait.sh`
 blocks until a child's result, needs-input file, or pane death;
 `tmux-subagent-status.sh` appends a status line for hooks; and
-`tmux-subagent-codex-notify.sh` adapts Codex `notify` to it. Follow-up dispatch
-is still planned. Closure is a documented procedure rather than a packaged
+`tmux-subagent-codex-notify.sh` adapts Codex `notify` to it; and
+`tmux-subagent-send.sh` types one follow-up into a Claude child's input box and
+reports `SENT`, `NOT-SUBMITTED` or `REFUSED`. Ownership-checked follow-up
+dispatch is still planned. Closure is a documented procedure rather than a packaged
 command: the picker `agent-clean-fz` and `agent-subagents-close` exist as local
 zsh functions on the author's machine, deriving every state on read, and
 elsewhere the parent performs the steps in the skill's Cleanup section by
