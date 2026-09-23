@@ -460,7 +460,14 @@ Prefer verified provider message delivery over keystrokes. Where only the
 terminal is available, send literal text with `tmux send-keys -t "$pane_id" -l
 -- "$text"` and Enter separately, after confirming readiness from the pane;
 `send-keys -l` reaches a busy Claude child, whose TUI queues typed text
-(verified 2026-09-09). Never paste into an unknown permission modal or while the
+(verified 2026-09-09). "Separately" means a second `tmux send-keys -t
+"$pane_id" C-m` call, a second or two later, never a trailing `Enter` in the
+same call. Claude Code reads a long burst of keystrokes as a paste and
+swallows an Enter that arrives inside it. On 2026-09-23 a coordinator's
+approval sat unsent in a child's input box for minutes this way. Then confirm
+delivery: capture the pane and check that the `❯` input line is empty and the
+child is working. Dim text in the input box (`ESC[2m` under `capture-pane
+-e`) is Claude Code's prompt suggestion, not typed input. Never paste into an unknown permission modal or while the
 user is typing. Automated check-then-send races: ownership check and delivery
 happen under the registry lock, which is also held before closing anything
 selected from an older list.
