@@ -135,7 +135,9 @@ profiles, even though every session's socket sits in one shared directory.
 Codex `notify` and Claude `Stop` hooks can be injected per launch (`-c`,
 `--settings`) and chained to the user's existing hook, so no global config
 edit is needed. `tmux-subagent-wait.sh` covers result, needs-input, dead pane,
-and gone session.
+and gone session for one child; `tmux-subagent-watch.sh` replaces hand-written
+per-session watchers with one registry-driven, one-shot watcher that keeps its
+reported-event baseline on disk.
 
 Redis was raised as an alternative bus. A redis daemon was already running on
 the development machine (see the local configuration example below), but it

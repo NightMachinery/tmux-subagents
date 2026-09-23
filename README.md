@@ -8,6 +8,9 @@ provider and profile unless explicitly overridden.
 `skills/tmux-subagents/scripts/`: `tmux-subagent-launch.sh` creates a session,
 wires hooks, registers it, and prepares exact-conversation resume; `tmux-subagent-wait.sh`
 blocks until a child's result, needs-input file, or pane death;
+`tmux-subagent-watch.sh` watches every child the registry lists under a parent
+and exits on the first batch of events (dead pane, menu on screen, result,
+needs-input, events-log line) without replaying earlier ones;
 `tmux-subagent-status.sh` appends a status line for hooks; and
 `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it; and
 `tmux-subagent-send.sh` types one follow-up into a Claude child's input box and
@@ -122,7 +125,8 @@ launch. Verified 2026-09-09: Claude children on the **same profile** (same
 BLOCKED / NEEDS-INPUT and the parent's `notify_when_idle` yields one idle
 notice. Across profiles neither side lists or can reach the other, so those
 children, like Codex and agy, write a result file that the parent waits on in
-the background with `tmux-subagent-wait.sh`. Turn-end hooks
+the background with `tmux-subagent-wait.sh`, or, for any number of children,
+with the one-shot `tmux-subagent-watch.sh`, re-run after each event. Turn-end hooks
 (`codex -c notify=[...]` via `tmux-subagent-codex-notify.sh`, Claude
 `--settings` Stop hook via `tmux-subagent-status.sh`) append to a shared
 `status.jsonl` without editing user config; the launch helper adds them for the

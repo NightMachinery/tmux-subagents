@@ -49,8 +49,8 @@ Create the private task directory before writing into it:
     task_dir="$state_dir/tasks/$task_id"
     mkdir -p "$task_dir"; chmod 700 "$state_dir" "$state_dir/tasks" "$task_dir"
 
-It holds `brief.md`, `checkpoint.md`, `result.md`, `result.needs-input.md`, and
-the launch context; an existing directory needs the same permissions. The brief
+It holds `brief.md`, `checkpoint.md`, `events.log`, `result.md`,
+`result.needs-input.md`, and the launch context; an existing directory needs the same permissions. The brief
 is a file the child reads, since the helper's environment variables brief
 nobody. It states:
 
@@ -64,7 +64,12 @@ nobody. It states:
 - registry, result, needs-input and checkpoint paths, and who to notify.
 
 Give every child the parent's checkpoint duty: a progress note at that path
-after each milestone, so a restart or compaction can resume. Keep the current
+after each milestone, so a restart or compaction can resume. Also require an
+events log, `<task dir>/events.log`: one line per event the parent should hear
+about (milestone reached, blocked, result written), each prefixed with a
+timestamp such as `[2026-01-31 14:05:00 UTC]`. Every new line wakes the parent
+through the watcher (Notifications), so keep it to events, not a diary; the
+checkpoint is the notebook. Keep the current
 branch and worktree unless authorized otherwise; a new CLI session does not
 inherit the parent's conversation. Resolve overlapping writes before dispatch,
 and check delegated work before folding it into the parent's output.
@@ -392,7 +397,9 @@ failed), summary, artifacts, and verification. The child writes a complete
 temporary file beside it and renames it into place before ending the turn. Every
 assignment, follow-ups included, gets a new task ID *and* a new result path,
 because the waiter tests existence only and an old file would satisfy a new
-assignment. The needs-input file is exactly the result path with `.md` replaced
+assignment. Keep a follow-up's result in the child's original task directory,
+named `result.<follow-up task id>.md`, since the watcher reads that directory's
+`result*.md` files. The needs-input file is exactly the result path with `.md` replaced
 by `.needs-input.md`, published the same atomic way.
 
 The parent validates the IDs inside the file before believing it, then reads the
@@ -458,7 +465,7 @@ helper into a scratch directory, briefed by file to log every
 - **Needs input**: a child that must ask publishes the needs-input file with the
   question and its default if unanswered; the waiter fires on it. The parent
   answers by `SendMessage` or, under the ownership rules, with the send helper,
-  deletes the file, and re-arms the waiter.
+  deletes the file, and re-runs the watcher or waiter.
 
 **Turn-end hooks.** Wire them per launch, on the command line, so no user config
 file is touched: `--task TASK` makes the launch helper insert them, and only for
@@ -486,21 +493,34 @@ was not tested). A parent with many children can `tail -f status.jsonl` filtered
 by task ID (Claude Code: Monitor) instead of one waiter each, provided that
 stream actually wakes it.
 
-**Supervising cheaply.** Wake the parent only on real events, from a zero-token
-shell watcher, not by reading panes:
+**Supervising with the watcher.** One zero-token watcher covers every child of
+a parent, however many there are and whenever they were launched:
 
-- Each child keeps a curated events log, one line per notable event written for
-  the parent; every new line is an event, debounced. The checkpoint is a
-  notebook, read on a periodic ping, never watched.
-- The watcher also checks what a child cannot log: a dead pane, and a real
-  permission or trust menu (the `❯ 1.` menu cursor, not merely its words).
-- Prefer a one-shot watcher, which exits on the first event and is re-armed by
-  the parent, where the host kills long-lived monitors on a timer and wakes the
-  parent to re-arm them. Re-arming never replays files or lines already seen.
-- When an alert fires, read the source log before replying; never acknowledge
-  it from the summary.
-- A permission dialog stalls a child without a turn-end event; the parent
-  answers it within the user's authorization.
+    "$skill_dir/scripts/tmux-subagent-watch.sh" --parent "$my_node_id"
+
+It re-reads the registry every cycle (default 15 s) and prints one line per
+event, `EVENT <node> <kind> <detail>`: `pane-dead`, `pane-gone`, `menu` (a real
+permission, trust or choice menu on screen, not text that merely quotes one),
+`result`, `needs-input`, and `log` for each new `events.log` line, held 60 s so
+a burst arrives together. `--turn-end` adds turn ends from `status.jsonl`; they
+are off by default because they are noisy and not completion. Checkpoints are
+not events. It exits after the first batch, and remembers what it reported
+under the state directory, so the loop is:
+
+1. Run it as a tracked background task (Claude Code: Bash with
+   `run_in_background`); its exit is the notification.
+2. On exit, read the source before replying: the `events.log` line, the result
+   file (validating its IDs), or the pane. Never act on the summary alone.
+3. Act: answer a menu within the user's authorization (it stalls a child
+   without a turn end), reply to a question, fold in a result.
+4. Run the same command again. It never replays what it already reported, and
+   baselines a child's existing files at first sight unless that child was
+   registered after the watcher's record began.
+
+It refuses to start when stdout is `/dev/null` (a `nohup` or detached copy
+could never notify anyone), reports `NO-CHILDREN` and exits when the selection
+is empty, and allows one watcher per selection. `--root ID` and `--node ID`
+select differently; `--timeout S` bounds a run for a periodic recovery ping.
 
 ## Coordinator handoff
 
@@ -608,6 +628,12 @@ directory to parent, child, and hooks.
   15 s, all four outcomes verified 2026-09-09. It polls, so it moves polling out
   of the parent's turn rather than removing it, and tests existence only:
   validate the IDs in the file after waking.
+- `tmux-subagent-watch.sh [--parent ID] [--root ID] [--node ID] [--interval S]
+  [--debounce S] [--timeout S] [--turn-end] [--follow]` is the registry-driven
+  watcher (Notifications). Exit 0 after printing events, 1 for `NO-CHILDREN` or
+  a timeout, 2 for a usage error or a stdout of `/dev/null`, 3 when another
+  watcher holds the same selection. The default selection is the caller's own
+  children, from `TMUX_SUBAGENT_NODE`.
 - `tmux-subagent-status.sh TASK_ID NODE_ID STATE [SUMMARY|-]` appends one status
   event, from a hook or directly for progress notes; `-` reads stdin, and both
   forms are truncated to 2000 characters.
