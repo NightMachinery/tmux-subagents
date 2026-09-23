@@ -169,7 +169,9 @@ It prints `NAME SESSION_ID PANE_ID`; capture all three. COMMAND is shell code,
 not a prompt and not an argv array: it needs shell quoting, and task text is
 never interpolated into it. The helper detaches without touching the user's
 terminal, keeps the pane after exit, wires the turn-end hook (Notifications),
-and registers the session.
+and registers the session. It also sets the session option `@agent_role` to
+`sub`, which local tooling such as notification hooks can read to tell a child
+from a main session.
 
 Supply `resume_command` as shell code calling the shared plugin, for example:
 

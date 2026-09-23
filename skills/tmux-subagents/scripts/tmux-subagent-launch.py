@@ -182,6 +182,8 @@ def main():
     sid, pane = made.stdout.strip().split()
     tmux('set-option', '-t', sid, 'remain-on-exit', 'on')
     tmux('set-option', '-t', sid, 'allow-rename', 'off')
+    # Marks a child session, so local tooling (notification hooks) can tell it from a main one.
+    tmux('set-option', '-t', sid, '@agent_role', 'sub')
     tmux('set-option', '-p', '-t', pane, '@agent_session_state', str(state))
     sock = tmux('display-message', '-p', '-t', pane, '#{socket_path}').stdout.strip()
     entry = dict(node_id=args.name, root_id=os.environ.get('TMUX_SUBAGENT_ROOT') or args.name,

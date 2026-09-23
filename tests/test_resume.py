@@ -120,6 +120,7 @@ if os.environ.get('TEST_BUSY'):
                 registry = json.loads((self.root / 'state/agents.json').read_text())
                 self.assertEqual(registry[name]['lineage'], 'root-child')
                 self.assertEqual(registry[name]['tmux_pane_id'], pane)
+                self.assertEqual(self.tmux('show-options', '-v', '-t', sid, '@agent_role').stdout.strip(), 'sub')
                 state = Path(registry[name]['resume_state'])
                 self.assertEqual((state / 'launch.json').stat().st_mode & 0o777, 0o600)
                 self.assertEqual(json.loads((state / 'identity.json').read_text())['id'], IDENT)
