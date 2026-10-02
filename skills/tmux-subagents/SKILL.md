@@ -5,6 +5,13 @@ description: Launch and coordinate Claude Code, Codex, or Google Antigravity (ag
 
 # tmux subagents
 
+When the shared `delegate` skill is installed, read it for worker mode/model
+selection, account boundaries, briefs, ownership, and result review. This skill
+provides the native tmux backend. Explicit user choices take precedence; model
+routing does not change the selected account or provider. If `delegate` is
+unavailable, say so and use this skill's standalone safeguards below. Keep its
+required result-file, resume, notification, and cleanup mechanics either way.
+
 ## Shared workflow
 
 Prepare a private brief, launch one detached interactive tmux session, verify

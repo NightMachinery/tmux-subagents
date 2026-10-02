@@ -48,6 +48,13 @@ without overwriting an existing installation. For the agy CLI, symlink
 
 ## Use
 
+The optional shared `delegate` skill coordinates weaker, peer, and stronger
+workers across in-process tools, Paseo, and tmux. When installed, it supplies
+the shared delegation policy; `tmux-subagents` remains the native TUI backend.
+Standalone installations retain this skill's safeguards and helpers. No script
+paths, state directories, or existing invocation names change.
+
+
 Invoke `/tmux-subagents` in Claude Code or agy, or `$tmux-subagents` in Codex:
 
 > Launch a child to review the parser. Use the same provider and profile,

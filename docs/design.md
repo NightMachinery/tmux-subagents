@@ -276,3 +276,13 @@ profile/cwd retention, naming, collisions, identity mismatch and process locking
 These checks do not make provider API calls; installed CLI help establishes the
 resume syntax, while real-provider authentication and TUI behavior are not
 exercised by the fake-provider suite.
+
+## Shared delegation policy
+
+The optional `delegate` skill selects weaker, peer, or stronger workers and
+coordinates task briefs, account boundaries, ownership, and acceptance across
+backends. This repository remains standalone: its skill preserves safeguards
+when `delegate` is absent, and its scripts, registry, hooks, result files, and
+exact resume paths stay tmux-specific. Paseo agents are not mirrored into the
+tmux registry. This additive binding avoids breaking existing children while
+the shared workflow is adopted.
