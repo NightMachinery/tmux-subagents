@@ -33,7 +33,8 @@ Launches never download dependencies.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
-  --agent claude-code codex --skill delegate delegate-weaker weaker tmux-subagents
+  --agent claude-code codex --skill delegate delegate-weaker weaker tmux-subagents \
+  paseo-model-update
 ```
 
 For another Claude profile, rerun with `CLAUDE_CONFIG_DIR` set to its config
@@ -54,6 +55,14 @@ workers across in-process tools, Paseo, and tmux. When installed, it supplies
 the shared delegation policy; `tmux-subagents` remains the native TUI backend.
 Standalone installations retain this skill's safeguards and helpers. No script
 paths, state directories, or existing invocation names change.
+
+The `paseo-model-update` skill handles "switch yourself to <model> <effort>"
+inside Paseo. It checks read-only first, waits for any gate the user set,
+changes model and effort in place when the target is on the agent's own
+provider entry, and otherwise offers a handoff to a new agent, since Paseo
+cannot move a running agent to another provider. The Paseo 0.10.2 behavior it
+relies on is cited in its
+[internals reference](skills/paseo-model-update/references/paseo-internals.md).
 
 Invoke `/tmux-subagents` in Claude Code or agy, or `$tmux-subagents` in Codex:
 
