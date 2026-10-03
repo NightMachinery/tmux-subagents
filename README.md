@@ -33,27 +33,27 @@ Launches never download dependencies.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
-  --agent claude-code codex --skill tmux-subagents
+  --agent claude-code codex --skill delegate delegate-weaker weaker tmux-subagents
 ```
 
 For another Claude profile, rerun with `CLAUDE_CONFIG_DIR` set to its config
 directory and `--agent claude-code`, one profile per invocation.
 
-For local development, symlink `skills/tmux-subagents` from this checkout into
-`~/.agents/skills/tmux-subagents` and each Claude profile's `skills/` directory,
-without overwriting an existing installation. For the agy CLI, symlink
-`skills/tmux-subagents/SKILL.md` to
-`~/.gemini/config/skills/tmux-subagents/SKILL.md`; see
-[Google's guide](https://antigravity.google/docs/cli/plugins/).
+For local development, symlink each selected directory under `skills/` into
+`~/.agents/skills/<name>` and each Claude profile's `skills/<name>`, without
+overwriting an existing installation. For the agy CLI, use whole-directory
+links under `~/.gemini/config/skills/<name>` so sibling references are available.
+Install `delegate`, `delegate-weaker`, and `weaker` together to preserve alias
+references. See the [delegation guide](docs/delegate.md) for modes and routing.
 
 ## Use
 
-The optional shared `delegate` skill coordinates weaker, peer, and stronger
+The shared `delegate` skill, bundled here, coordinates weaker, peer, and
+stronger
 workers across in-process tools, Paseo, and tmux. When installed, it supplies
 the shared delegation policy; `tmux-subagents` remains the native TUI backend.
 Standalone installations retain this skill's safeguards and helpers. No script
 paths, state directories, or existing invocation names change.
-
 
 Invoke `/tmux-subagents` in Claude Code or agy, or `$tmux-subagents` in Codex:
 

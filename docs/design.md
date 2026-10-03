@@ -286,3 +286,9 @@ when `delegate` is absent, and its scripts, registry, hooks, result files, and
 exact resume paths stay tmux-specific. Paseo agents are not mirrored into the
 tmux registry. This additive binding avoids breaking existing children while
 the shared workflow is adopted.
+
+The canonical `delegate` skill and its `delegate-weaker`/`weaker` compatibility
+entrypoints live together under this repository's `skills/` directory. Install
+the bundle to preserve the aliases' relative links. The personal shell
+repository discovers this source through its standalone skill-repository root;
+it must not retain duplicate source directories with the same skill names.
