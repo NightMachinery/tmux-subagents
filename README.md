@@ -33,9 +33,13 @@ Launches never download dependencies.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
-  --agent claude-code codex --skill delegate delegate-weaker weaker tmux-subagents \
-  paseo-model-update
+  --agent claude-code codex --skill tmux-subagents
 ```
+
+The shared delegation policy (`delegate`, its `delegate-weaker` and `weaker`
+aliases, and `paseo-model-update`) lives in
+[NightMachinery/delegate](https://github.com/NightMachinery/delegate); install it
+from there to get worker routing on top of this backend.
 
 For another Claude profile, rerun with `CLAUDE_CONFIG_DIR` set to its config
 directory and `--agent claude-code`, one profile per invocation.
@@ -44,25 +48,18 @@ For local development, symlink each selected directory under `skills/` into
 `~/.agents/skills/<name>` and each Claude profile's `skills/<name>`, without
 overwriting an existing installation. For the agy CLI, use whole-directory
 links under `~/.gemini/config/skills/<name>` so sibling references are available.
-Install `delegate`, `delegate-weaker`, and `weaker` together to preserve alias
-references. See the [delegation guide](docs/delegate.md) for modes and routing.
+See the [delegation guide](https://github.com/NightMachinery/delegate/blob/main/docs/delegate.md)
+for modes and routing.
 
 ## Use
 
-The shared `delegate` skill, bundled here, coordinates weaker, peer, and
-stronger
-workers across in-process tools, Paseo, and tmux. When installed, it supplies
-the shared delegation policy; `tmux-subagents` remains the native TUI backend.
-Standalone installations retain this skill's safeguards and helpers. No script
-paths, state directories, or existing invocation names change.
-
-The `paseo-model-update` skill handles "switch yourself to <model> <effort>"
-inside Paseo. It checks read-only first, waits for any gate the user set,
-changes model and effort in place when the target is on the agent's own
-provider entry, and otherwise offers a handoff to a new agent, since Paseo
-cannot move a running agent to another provider. The Paseo 0.10.2 behavior it
-relies on is cited in its
-[internals reference](skills/paseo-model-update/references/paseo-internals.md).
+The shared `delegate` skill, from
+[NightMachinery/delegate](https://github.com/NightMachinery/delegate),
+coordinates weaker, peer, and stronger workers across in-process tools, Paseo,
+and tmux. When installed, it supplies the shared delegation policy;
+`tmux-subagents` remains the native TUI backend. Standalone installations
+retain this skill's safeguards and helpers. No script paths, state
+directories, or existing invocation names change.
 
 Invoke `/tmux-subagents` in Claude Code or agy, or `$tmux-subagents` in Codex:
 

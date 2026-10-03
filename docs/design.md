@@ -287,8 +287,11 @@ exact resume paths stay tmux-specific. Paseo agents are not mirrored into the
 tmux registry. This additive binding avoids breaking existing children while
 the shared workflow is adopted.
 
-The canonical `delegate` skill and its `delegate-weaker`/`weaker` compatibility
-entrypoints live together under this repository's `skills/` directory. Install
-the bundle to preserve the aliases' relative links. The personal shell
-repository discovers this source through its standalone skill-repository root;
-it must not retain duplicate source directories with the same skill names.
+The canonical `delegate` skill, its `delegate-weaker`/`weaker` compatibility
+entrypoints and `paseo-model-update` moved on 2026-10-03 to
+[NightMachinery/delegate](https://github.com/NightMachinery/delegate), with
+their history kept there; this repository's history was not rewritten. Install
+the aliases with `delegate` to preserve their relative links. The personal
+shell repository discovers both repositories through its standalone
+skill-repository root; it must not retain duplicate source directories with
+the same skill names.
