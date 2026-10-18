@@ -49,6 +49,20 @@ def requested_model(command):
     return found.group(1) if found else ''
 
 
+def agy_profile_hooked(command):
+    # A throwaway profile from tmux-subagent-agy-profile.sh carries its own
+    # config/hooks.json with the Stop hook, so its turn ends are reported
+    # without touching the user's global agy config.
+    found = re.search(r'--gemini_dir[= ]+([^\s\'"]+)', command)
+    if not found:
+        return False
+    try:
+        hooks = (Path(found.group(1)).expanduser() / 'config/hooks.json').read_text()
+    except OSError:
+        return False
+    return 'tmux-subagent-agy-stop-hook.sh' in hooks
+
+
 PROVIDER_ALIASES = {'claude': ('claude', 'claude-m', 'claude-work'),
                      'codex': ('codex', 'codex-m'),
                      'agy': ('agy', 'antigravity', 'antigravity-m')}
@@ -149,11 +163,11 @@ def main():
         # passing it on the command line (the principle every other provider
         # follows in this launcher), and it would race concurrent agy
         # children. agy children are therefore file-only for the turn-end
-        # status log; `notify` below records that, and Notifications
-        # (SKILL.md) covers the separate question of the parent's push
-        # channel, which is file-only for agy regardless.
+        # status log, unless they run on a throwaway profile whose own
+        # hooks.json holds the Stop hook (tmux-subagent-agy-profile.sh);
+        # `notify` below records which.
         hooks = []
-    notify = 'file-only' if provider == 'agy' else 'hook'
+    notify = 'file-only' if provider == 'agy' and not agy_profile_hooked(args.command) else 'hook'
     model = requested_model(args.command)
     launcher = provider_launcher(args.command, provider, word)
     initial = args.command
