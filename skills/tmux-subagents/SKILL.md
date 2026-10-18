@@ -189,7 +189,9 @@ exact launcher token when the shell setup is complex.
 The brief requires the child to run
 `"$skill_dir/scripts/tmux-subagent-register.sh" PROVIDER` in its own shell
 before task work; it captures the provider's exported conversation ID, as do
-Claude startup, Codex notify and local identity hooks. Verify `identity.json`
+Claude startup, Codex notify and local identity hooks (an agy worker on a
+hooked profile is the exception: its Stop hook records it, see Operating an agy
+worker). Verify `identity.json`
 under the entry's `resume_state` before declaring resume ready; if registration
 fails, report that limitation and resolve it.
 
@@ -479,19 +481,26 @@ under agy's terminal sandbox. For read-only work, the `argon-readonly` skill's
 headless run is simpler.
 
 **Profile.** Never edit the user's own agy configuration; build a throwaway
-profile in the private task directory:
+profile in the private state directory, outside every directory it grants:
 
-    profile="$task_dir/agy-profile"
+    profile="$state_dir/agy-profiles/$task_id"
     "$skill_dir/scripts/tmux-subagent-agy-profile.sh" create "$profile" \
-      --workspace "$workdir" [--write EXTRA_DIR]... [--source ~/.gemini]
+      --workspace "$workdir" --task-dir "$task_dir" \
+      [--read INPUT_DIR]... [--write EXTRA_DIR]... [--source ~/.gemini]
 
 It copies the account's token and onboarding state with `cp` (never print or
 read the token), writes the verified sandbox settings
 (`enableTerminalSandbox: true`, `toolPermission: "proceed-in-sandbox"`,
 `artifactReviewPolicy: "agent-decides"`), an explicit
-`write_file(<abs dir>/)` rule per workspace and `--write` root (agy 1.4.2's
-implicit workspace grant denied even in-workspace writes), and the workspace
-as trusted, and installs the Stop hook in the profile's `config/hooks.json`.
+`write_file(<abs dir>/)` rule per workspace, task directory and `--write` root
+(agy 1.4.2's implicit workspace grant denied even in-workspace writes), a
+`read_file(<abs dir>/)` rule for the task directory and each `--read` root,
+and the workspace as trusted, and installs the Stop hook in the profile's
+`config/hooks.json`. Every file read or created outside those directories
+raises its own one-time dialog: in the first implementation runs most of
+fifteen such dialogs came from the brief, the result file, the registry, the
+launcher scripts and this skill, so grant the task directory and keep
+bookkeeping out of the worker's brief (below).
 Without the copied onboarding state agy shows its first-run screens, and the
 terms screen arrives with its data-collection box already ticked: untick it,
 never accept it for the user. Never add `--dangerously-skip-permissions` or an
@@ -512,8 +521,17 @@ copied token file instead of the system keychain (verified on macOS):
 
 The profile path must contain no spaces, since `flags` prints it unquoted. The
 registry then records `notify: hook`, and with the launch helper's task and node
-variables each turn end also lands in `status.jsonl`. Not verified: resuming a
-profile-launched worker through the plugin.
+variables each turn end also lands in `status.jsonl`. The Stop hook also
+records the worker's conversation for exact resume at its first turn end, so
+`Ctrl-b r` resumes it (verified) and the worker never runs the register script.
+
+**The worker's brief** is narrower than a tmux child's (Prepare). It holds the
+objective, the owned paths, the checks to run, the result path and its format,
+the events-log and needs-input paths, and "work in small steps; after each say
+what changed and what comes next". It does not tell the worker to read this
+skill, the registry, the launcher scripts or the plugin, to run
+`tmux-subagent-register.sh`, or to delegate: the operator does all the
+bookkeeping. Put every input it must read in the workspace or a `--read` root.
 
 **Bell.** The Stop hook reports turn ends; dialogs, stalls and exits need the
 pane watched. Start the zero-token bell in its own detached session, so it
@@ -582,9 +600,12 @@ profile and its conversation history). Close the child per Cleanup.
 
 - Argon Medium, interactive with these settings, reviewed a real change in
   about ten minutes with zero permission dialogs. Reads outside the workspace
-  usually pass silently (the sandbox guards writes), but one run asked once for
-  a file outside it ("outside workspace": allow, always allow non-workspace
-  access, or deny); copy required inputs into the workspace.
+  passed silently in that review, but the implementation runs raised one
+  "File access ... outside workspace" dialog per file read or created outside
+  the workspace (allow, always allow non-workspace access, or deny), at least
+  fifteen in all, mostly for bookkeeping files. A `read_file(<dir>/)` or
+  `write_file(<dir>/)` rule silences them for that directory (verified with
+  Flash Low on 2026-10-19), hence `--task-dir` and `--read`.
 - Tools may be missing inside the sandbox (`pytest` was), and commands that
   write caches or lock directories outside the workspace fail unless those
   directories get `--write` rules, so the operator runs them.
@@ -713,8 +734,9 @@ directory to parent, child, and hooks.
   comments hold the submit mechanics.
 - `tmux-subagent-codex-notify.sh TASK_ID NODE_ID [CHAIN_CMD ARGS...] PAYLOAD`
   logs a Codex turn end and chains the user's own notify command.
-- `tmux-subagent-agy-profile.sh create PROFILE --workspace DIR [--write DIR]...
-  [--source ROOT] [--no-hook]` builds a sandboxed throwaway agy profile; `flags
+- `tmux-subagent-agy-profile.sh create PROFILE --workspace DIR [--task-dir DIR]
+  [--read DIR]... [--write DIR]... [--source ROOT] [--no-hook]` builds a
+  sandboxed throwaway agy profile outside every granted directory; `flags
   PROFILE` prints its launch flags, `usage PROFILE` reads the account's quota,
   and `destroy PROFILE [--all]` deletes the token copy (or the whole profile,
   only one this script made). Exit 64 is a usage error or a refusal.
@@ -726,6 +748,7 @@ directory to parent, child, and hooks.
   disappears, 3 when another bell watches it.
 - `tmux-subagent-agy-stop-hook.sh` is the agy Stop hook that profile installs:
   it reports a turn end to `TMUX_SUBAGENT_AGY_NOTIFY` and `status.jsonl`,
+  records the conversation for exact resume through the agent-session plugin,
   prints `{}` and returns at once.
 
 Status events publish no results and update no registry lifecycle state.

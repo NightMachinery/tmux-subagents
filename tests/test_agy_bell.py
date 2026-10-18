@@ -246,6 +246,25 @@ class BellEndToEnd(unittest.TestCase):
         row = json.loads(status.read_text().splitlines()[-1])
         self.assertEqual((row['task_id'], row['node_id'], row['state']), ('t1', 'n1', 'turn_end'))
 
+    def test_stop_hook_records_identity(self):
+        plugin = self.root / 'plugin'
+        plugin.mkdir()
+        calls = self.root / 'pane-calls'
+        (plugin / 'agent-session.plugin.zsh').write_text('# fake\n')
+        (plugin / 'pane.py').write_text('import sys\n'
+                                        f'open({str(calls)!r}, "a").write(" ".join(sys.argv[1:]) + "|" + sys.stdin.read())\n')
+        env = dict(self.env, AGENT_SESSION_PLUGIN=str(plugin / 'agent-session.plugin.zsh'),
+                   AGENT_SESSION_STATE=str(self.root / 'pane-state'))
+        payload = '{"conversationId": "c-1", "transcriptPath": "/t"}'
+        hook = subprocess.run(['sh', str(SCRIPTS / 'tmux-subagent-agy-stop-hook.sh')], env=env,
+                              input=payload, text=True, capture_output=True, timeout=10)
+        self.assertEqual(hook.stdout, '{}\n')
+        for _ in range(50):
+            if calls.exists():
+                break
+            time.sleep(0.1)
+        self.assertEqual(calls.read_text(), f"hook {self.root / 'pane-state'} agy|{payload}")
+
     def test_stop_hook_without_target_still_answers(self):
         hook = subprocess.run(['sh', str(SCRIPTS / 'tmux-subagent-agy-stop-hook.sh')], env=self.env,
                               input='{}', text=True, capture_output=True, timeout=10)
@@ -318,7 +337,7 @@ class Profile(unittest.TestCase):
         self.assertIn('tmux-subagent-agy-stop-hook.sh', hooks['tmux-subagents']['Stop'][0]['command'])
 
         settings['trustedWorkspaces'] = ['/elsewhere', ws]  # agy adds to it too
-        settings['permissions']['allow'].append('read_file(/elsewhere/)')
+        settings['permissions']['allow'] += ['read_file(/stale/)', 'other_rule(/elsewhere/)']
         (app / 'settings.json').write_text(json.dumps(settings))
         other = self.root / 'cache'
         other.mkdir()
@@ -327,8 +346,8 @@ class Profile(unittest.TestCase):
         self.assertEqual(again.returncode, 0, again.stderr)
         settings = json.loads((app / 'settings.json').read_text())
         self.assertEqual(settings['trustedWorkspaces'], ['/elsewhere', ws])
-        self.assertEqual(settings['permissions']['allow'],
-                         ['read_file(/elsewhere/)', f'write_file({ws}/)', f'write_file({other.resolve()}/)'])
+        self.assertEqual(settings['permissions']['allow'],   # the helper owns read and write rules
+                         ['other_rule(/elsewhere/)', f'write_file({ws}/)', f'write_file({other.resolve()}/)'])
 
         flags = self.run_helper('flags', self.profile).stdout.split()
         self.assertEqual(flags, [f'--gemini_dir={self.profile.resolve()}', '--app_data_dir=antigravity-cli'])
@@ -338,6 +357,18 @@ class Profile(unittest.TestCase):
         self.assertEqual(self.run_helper('destroy', self.profile, '--all').returncode, 0)
         self.assertFalse(self.profile.exists())
         self.assertTrue((self.source / 'antigravity-cli/antigravity-oauth-token').exists())
+
+    def test_task_dir_and_read_grants(self):
+        task, docs = self.root / 'task', self.root / 'docs'
+        task.mkdir()
+        docs.mkdir()
+        out = self.run_helper('create', self.profile, '--source', self.source, '--workspace', self.ws,
+                              '--task-dir', task, '--read', docs)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        allow = json.loads((self.profile / 'antigravity-cli/settings.json').read_text())['permissions']['allow']
+        ws, task, docs = (str(d.resolve()) for d in (self.ws, task, docs))
+        self.assertEqual(allow, [f'write_file({ws}/)', f'write_file({task}/)',
+                                 f'read_file({task}/)', f'read_file({docs}/)'])
 
     def test_refusals(self):
         def refused(*args):
@@ -350,6 +381,9 @@ class Profile(unittest.TestCase):
                       refused('create', self.source, '--source', self.source, '--workspace', self.ws))
         refused('create', self.profile, '--source', self.source, '--workspace', '/')
         refused('destroy', self.source, '--all')                                      # not ours
+        self.assertIn('inside a granted directory',                                  # token readable
+                      refused('create', self.root / 'task/agy-profile', '--source', self.source,
+                              '--workspace', self.ws, '--task-dir', self.root))
         self.assertTrue(self.source.exists())
 
     def test_no_hook(self):

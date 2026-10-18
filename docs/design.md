@@ -242,6 +242,21 @@ and the bell did not repeat it; the bell reported the worker's exit and
 stopped; `agy -p /usage` worked through the profile's flags. Argon trials the
 same day supplied the dialog counts and caveats in the skill's section.
 
+Their implementation runs then raised at least fifteen one-time "outside
+workspace" dialogs, mostly for files our own workflow placed there: the brief
+and result under the task directory, the registry, the register script, the
+plugin's files and this skill. Two changes remove them. The profile helper
+grants the task directory (`write_file` plus `read_file`, both verified live on
+2026-10-19 to silence the dialog for that directory, while a control read
+elsewhere still asked), and the worker's brief carries no bookkeeping. The Stop
+hook takes over registration: agy passes the hook `conversationId` in its
+payload and the launch environment (`AGENT_SESSION_STATE`,
+`AGENT_SESSION_PLUGIN`), so the hook feeds the payload to the plugin's
+`pane.py hook`, and `respawn-pane` then resumed the same conversation. The
+alternative, a workspace-local task directory excluded from git, was not taken:
+it would move results out of the private state directory the watcher reads, and
+put them one `git add -A` away from a commit.
+
 Why a pane-watching bell beside the hook: agy has no dialog or notification
 hook, and the operator must not poll, since each check is a model turn over its
 whole context. Why the bell skips menus for a log target: the registry watcher

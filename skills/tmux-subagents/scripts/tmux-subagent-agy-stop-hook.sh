@@ -9,11 +9,21 @@
 # TMUX_SUBAGENT_TASK and TMUX_SUBAGENT_NODE set, as the launch helper sets
 # them, a turn_end line also goes to status.jsonl.
 #
-# agy waits for a hook: drain stdin, start the sends in the background, print
+# Under the launch helper it also records the worker's conversation for exact
+# resume, from the payload's conversationId, through the agent-session plugin's
+# own hook entry point, so the worker never runs tmux-subagent-register.sh or
+# reads anything outside its workspace for bookkeeping.
+#
+# agy waits for a hook: read stdin, start the rest in the background, print
 # {} and return at once. The hook also touches the bell's mark file, so
 # tmux-subagent-agy-bell.sh does not report the same turn end again.
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-command cat >/dev/null 2>&1
+payload=$(command cat 2>/dev/null)
+runtime=${AGENT_SESSION_PLUGIN:+$(command dirname -- "$AGENT_SESSION_PLUGIN")/pane.py}
+if [ -n "${AGENT_SESSION_STATE:-}" ] && [ -f "${runtime:-}" ]; then
+  ( printf '%s' "$payload" | command python3 "$runtime" hook "$AGENT_SESSION_STATE" agy \
+      >/dev/null 2>&1 & )
+fi
 spec=${TMUX_SUBAGENT_AGY_NOTIFY:-}
 state=${TMUX_SUBAGENTS_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-subagents}
 name=agy

@@ -1,5 +1,6 @@
 #!/bin/sh
-# tmux-subagent-agy-profile.sh create PROFILE --workspace DIR [--write DIR]...
+# tmux-subagent-agy-profile.sh create PROFILE --workspace DIR [--task-dir DIR]
+#                                     [--write DIR]... [--read DIR]...
 #                                     [--source ROOT] [--no-hook]
 # tmux-subagent-agy-profile.sh flags PROFILE
 # tmux-subagent-agy-profile.sh usage PROFILE
@@ -12,9 +13,12 @@
 # 1.4.2 shows its colour and terms screens, the latter with the data-collection
 # box ticked; jetski_state.pbtxt as well). It writes
 # antigravity-cli/settings.json with the verified sandbox keys, one write_file
-# rule per workspace or --write root, and the workspace as trusted (which skips
-# the trust question), and installs the Stop hook in config/hooks.json.
-# Re-running it repoints the write rules and keeps other settings agy added.
+# rule per workspace, --task-dir or --write root, one read_file rule per
+# --task-dir or --read root (without them each file outside the workspace asks
+# once), and the workspace as trusted (which skips the trust question), and
+# installs the Stop hook in config/hooks.json. Re-running it repoints the read
+# and write rules and keeps other settings agy added. The profile must lie
+# outside every granted directory, since it holds the token copy.
 #
 # `flags` prints the arguments that select the profile, for
 #   SSH_CONNECTION=${SSH_CONNECTION:-agy-file-auth} command agy $(... flags P) ...
@@ -39,12 +43,19 @@ shift 2
 
 case $cmd in
 create)
-  source=$HOME/.gemini hook=1 workspace= writes=
+  source=$HOME/.gemini hook=1 workspace= writes= reads=
   while [ $# -gt 0 ]; do
     case $1 in
       --workspace) [ $# -ge 2 ] || die '--workspace needs a directory'; workspace=$(absdir "$2"); shift 2 ;;
       --write) [ $# -ge 2 ] || die '--write needs a directory'
         writes="$writes$(absdir "$2")
+"; shift 2 ;;
+      --read) [ $# -ge 2 ] || die '--read needs a directory'
+        reads="$reads$(absdir "$2")
+"; shift 2 ;;
+      --task-dir) [ $# -ge 2 ] || die '--task-dir needs a directory'
+        d=$(absdir "$2"); writes="$writes$d
+"; reads="$reads$d
 "; shift 2 ;;
       --source) [ $# -ge 2 ] || die '--source needs a directory'; source=$2; shift 2 ;;
       --no-hook) hook=0; shift ;;
@@ -63,8 +74,9 @@ create)
   profile=$(absdir "$profile")
   case "$profile/" in "$source/"*) die 'the profile must not be inside the source root' ;; esac
   case "$source/" in "$profile/"*) die 'the source root must not be inside the profile' ;; esac
-  for root in "$workspace" $writes; do
-    case $root in /|"$HOME") die "refusing a write rule for $root: name the workspace itself" ;; esac
+  for root in "$workspace" $writes $reads; do
+    case $root in /|"$HOME") die "refusing a rule for $root: name the directory itself" ;; esac
+    case "$profile/" in "$root/"*) die "the profile must not be inside a granted directory ($root)" ;; esac
   done
   : > "$profile/$marker"
   command chmod 700 "$profile" "$profile/$app" "$profile/config"
@@ -78,9 +90,10 @@ create)
       echo "tmux-subagent-agy-profile: no $f in the source; agy may show its first-run screens" >&2
     fi
   done
-  python3 - "$profile" "$hook" "$here" "$workspace" $writes <<'PY'
+  python3 - "$profile" "$hook" "$here" "$reads" "$workspace" $writes <<'PY'
 import json, os, shlex, sys, tempfile
-profile, hook, here, roots = sys.argv[1], sys.argv[2] == '1', sys.argv[3], sys.argv[4:]
+profile, hook, here = sys.argv[1], sys.argv[2] == '1', sys.argv[3]
+reads, roots = [r for r in sys.argv[4].split('\n') if r], sys.argv[5:]
 
 def load(path):
     try:
@@ -101,8 +114,9 @@ settings = load(path)
 settings.update(enableTerminalSandbox=True, toolPermission='proceed-in-sandbox',
                 artifactReviewPolicy='agent-decides')
 perms = settings.setdefault('permissions', {})
-allow = [r for r in perms.get('allow', []) if not r.startswith('write_file(')]
+allow = [r for r in perms.get('allow', []) if not r.startswith(('write_file(', 'read_file('))]
 allow += ['write_file(%s/)' % r.rstrip('/') for r in dict.fromkeys(roots)]
+allow += ['read_file(%s/)' % r.rstrip('/') for r in dict.fromkeys(reads)]
 perms['allow'] = allow
 trusted = settings.setdefault('trustedWorkspaces', [])
 if roots[0] not in trusted:
