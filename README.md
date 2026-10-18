@@ -33,8 +33,12 @@ Launches never download dependencies.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
-  --agent claude-code codex --skill tmux-subagents
+  --agent claude-code codex --skill tmux-subagents argon-readonly
 ```
+
+`argon-readonly` is a companion skill for running Gemini 4 Argon through
+`agy` on work that needs no writes; drop it from the list if you do not use
+Argon.
 
 The shared delegation policy (`delegate`, its `delegate-weaker` and `weaker`
 aliases, and `paseo-model-update`) lives in
@@ -74,6 +78,11 @@ agy children default to **Gemini Flash Latest**; request **Gemini Pro Latest**
 explicitly to use Pro. Latest is resolved from `agy models` at launch and the
 concrete model is recorded in metadata and the tmux name. A Pro parent does not
 make its children Pro.
+
+For read-only work on Gemini 4 Argon (reviews, plan critique, second
+opinions), invoke `/argon-readonly` instead. It covers checking which account
+lists Argon, a headless `--mode plan` run, sizing jobs so a long answer is not
+cut off, the separate weekly Argon quota, and verifying what it reports.
 
 ## Names and inspection
 
@@ -165,6 +174,7 @@ not just the prompt. Loading the skill grants no additional permissions and does
 not switch branches.
 
 - [Skill](skills/tmux-subagents/SKILL.md)
+- [Argon read-only skill](skills/argon-readonly/SKILL.md)
 - [Design and remaining automation](docs/design.md)
 - [Related projects and integration choices](docs/related-projects.md)
 - [Skills CLI installation formats](https://github.com/vercel-labs/skills#source-formats)
