@@ -7,7 +7,10 @@ worker's pane instead and tells the operator when
 
   turn-end   the busy marker (`esc to cancel`) is gone for two polls, unless
              the Stop hook already reported this turn end;
-  dialog     a permission or review dialog appears near the bottom of the pane;
+  dialog     a permission or review dialog appears near the bottom of the pane,
+             keyed by that whole bottom block, so a second dialog with the
+             same wording but another path is a new one; while one stays
+             open, a reminder every REMIND s says for how long;
   stall      the pane shows the busy marker but has not changed for STALL s
              (once per stall);
   keep-warm  the worker is busy, the operator has heard nothing for WARM s and
@@ -40,6 +43,8 @@ DIALOG = re.compile(r'(?i)allow once|always allow|allow this|allow access|deny a
                     r'|do you trust|\(y/n\)|\[y/n\]')
 TAIL_DIALOG = 14
 TAIL_REPORT = 15
+TAIL_DIALOG_REPORT = 8
+SPINNER = re.compile('[\u2800-\u28ff]')
 
 
 def load_watch():
@@ -69,6 +74,13 @@ def dialog_lines(screen):
     return '\n'.join(hits[-6:])
 
 
+def dialog_key(lines):
+    """The bottom block that identifies one dialog: two agy file-access dialogs
+    share their wording and differ only in the path line. Spinner frames and
+    the busy footer are left out, so an animation does not make it new."""
+    return '\n'.join(SPINNER.sub('', l) for l in lines[-TAIL_DIALOG:] if BUSY not in l.lower())
+
+
 def same(mtime, stamp):
     """A file mtime set from STAMP; filesystems round it."""
     return stamp is not None and abs(mtime - stamp) < 0.5
@@ -77,15 +89,16 @@ def same(mtime, stamp):
 class Bell:
     """The detection state machine; pure, so tests feed it fake screens."""
 
-    def __init__(self, stall=1200, warm=1500, warm_max=12600, find_menu=None, now=0.0):
-        self.stall, self.warm, self.warm_max = stall, warm, warm_max
+    def __init__(self, stall=1200, warm=1500, warm_max=12600, remind=300, find_menu=None, now=0.0):
+        self.stall, self.warm, self.warm_max, self.remind = stall, warm, warm_max, remind
         self.find_menu = find_menu      # set for a log target: the watcher reports these
         self.last_screen = None
         self.changed = now
         self.stall_sent = False
         self.busy = False
         self.idle_polls = 0
-        self.last_dialog = ''
+        self.dialog = ''                # key of the dialog on screen, '' when none
+        self.dialog_first = self.dialog_sent = now
         self.last_real = now            # last event other than a keep-warm ping
         self.warm_at = None
         self.started = now              # the mark's mtime when the bell started
@@ -122,9 +135,16 @@ class Bell:
         found = dialog_lines(screen)
         if found and self.find_menu and self.find_menu(screen):
             found = ''
-        if found and found != self.last_dialog:
-            events.append(('dialog', found))
-        self.last_dialog = found
+        bottom = '\n'.join(l[:220] for l in lines[-TAIL_DIALOG_REPORT:])
+        if not found:
+            self.dialog = ''
+        elif dialog_key(lines) != self.dialog:
+            self.dialog = dialog_key(lines)
+            self.dialog_first = self.dialog_sent = now
+            events.append(('dialog', bottom))
+        elif self.remind and now - self.dialog_sent >= self.remind:
+            self.dialog_sent = now
+            events.append(('dialog-open', f'{int((now - self.dialog_first) // 60)}\n{bottom}'))
         if self.busy and not self.stall_sent and now - self.changed >= self.stall:
             self.stall_sent = True
             events.append(('stall', str(int((now - self.changed) // 60))))
@@ -143,6 +163,9 @@ def message(kind, text, label):
         return head + "the worker's turn ended. Last lines of its pane:\n" + text
     if kind == 'dialog':
         return head + 'a dialog seems to be waiting for you:\n' + text
+    if kind == 'dialog-open':
+        minutes, _, bottom = text.partition('\n')
+        return head + f'the dialog is still open after {minutes} minutes:\n' + bottom
     if kind == 'stall':
         return head + f'busy, but the pane has not changed for {text} minutes; check whether it is stuck.'
     if kind == 'keep-warm':
@@ -203,6 +226,8 @@ def main():
     p.add_argument('--stall', type=float, default=float(env('AGY_BELL_STALL', 1200)))
     p.add_argument('--warm', type=float, default=float(env('AGY_BELL_WARM', 1500)), help='0 turns it off')
     p.add_argument('--warm-max', type=float, default=float(env('AGY_BELL_WARM_MAX', 12600)))
+    p.add_argument('--remind', type=float, default=float(env('AGY_BELL_REMIND', 300)),
+                   help='seconds between reminders of an open dialog; 0 turns them off')
     args = p.parse_args()
 
     root = state_root()
@@ -253,7 +278,7 @@ def main():
         p.error(str(error))
 
     watch = load_watch() if target.kind == 'log' else None
-    bell = Bell(args.stall, args.warm, args.warm_max,
+    bell = Bell(args.stall, args.warm, args.warm_max, args.remind,
                 find_menu=watch.find_menu if watch else None, now=started)
     while True:
         state = tmux('display-message', '-p', '-t', pane_id, '#{pane_id} #{pane_dead} #{pane_dead_status}')

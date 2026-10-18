@@ -525,9 +525,11 @@ outlives the operator's turns:
 Omit `--notify` to use the node's `events.log`, and run the watcher as in
 Notifications; with that target the bell leaves menus the watcher reports to
 it. The bell sends `turn-end` (the `esc to cancel` busy marker gone, when the
-hook did not already say so), `dialog`, `stall` (busy with an unchanged pane
-for `AGY_BELL_STALL` s, 1200 by default), keep-warm pings, and the pane's exit,
-then exits itself.
+hook did not already say so), `dialog` (keyed by the pane's whole bottom block,
+so a second dialog that differs only in its path is reported too, and repeated
+every `AGY_BELL_REMIND` s, 300 by default, while it stays open), `stall` (busy
+with an unchanged pane for `AGY_BELL_STALL` s, 1200 by default), keep-warm
+pings, and the pane's exit, then exits itself.
 
 **The loop.** Hand over the task, then end your turn: never poll, never sleep
 in a loop, never re-read the pane "to check", because each check is a model
@@ -539,7 +541,9 @@ turn over the operator's whole context. On a message:
   knows Claude's input box);
 - dialog: allow once what the task needs (reads, writes inside the write
   roots, sandboxed commands in the workspace) and deny writes elsewhere,
-  network access and anything unsandboxed; never choose an "always" answer;
+  network access and anything unsandboxed; never choose an "always" answer.
+  After answering, capture the pane once to confirm the dialog closed and no
+  new one took its place (agy can ask twice in a row);
 - stall: read the pane; a cut stream needs a "continue" message;
 - keep-warm: reply with one word and end the turn. The ping goes out while the
   worker is busy and the operator idle and silent for `AGY_BELL_WARM` s (1500,
@@ -716,9 +720,9 @@ directory to parent, child, and hooks.
   only one this script made). Exit 64 is a usage error or a refusal.
 - `tmux-subagent-agy-bell.sh (--node ID | --pane TARGET [--socket PATH])
   [--notify paseo:ID|log:PATH] [--label NAME] [--poll S] [--stall S] [--warm S]
-  [--warm-max S]` is the zero-token bell for one agy worker (Operating an agy
-  worker); the thresholds also read `AGY_BELL_POLL`, `AGY_BELL_STALL`,
-  `AGY_BELL_WARM` and `AGY_BELL_WARM_MAX`. Exit 0 when the pane exits or
+  [--warm-max S] [--remind S]` is the zero-token bell for one agy worker
+  (Operating an agy worker); the thresholds also read `AGY_BELL_POLL`,
+  `AGY_BELL_STALL`, `AGY_BELL_WARM`, `AGY_BELL_WARM_MAX` and `AGY_BELL_REMIND`. Exit 0 when the pane exits or
   disappears, 3 when another bell watches it.
 - `tmux-subagent-agy-stop-hook.sh` is the agy Stop hook that profile installs:
   it reports a turn end to `TMUX_SUBAGENT_AGY_NOTIFY` and `status.jsonl`,

@@ -92,6 +92,42 @@ class BellDetection(unittest.TestCase):
         self.assertEqual(b.observe(IDLE, 15, 0), [])
         self.assertEqual([k for k, _ in b.observe(AGY_PERMISSION, 20, 0)], ['dialog'])  # a new one
 
+    def test_same_wording_other_path_is_a_new_dialog(self):
+        def file_access(path):
+            return ('  Reading the project files\n File access\n Allow access to this file?\n'
+                    f'   Read: {path}\n > 1. Yes, allow access\n   2. No, deny access\n')
+        b = self.bell()
+        first = b.observe(file_access('~/repo/SKILL.md'), 5, 0)
+        self.assertEqual([k for k, _ in first], ['dialog'])
+        self.assertIn('Read: ~/repo/SKILL.md', first[0][1])
+        second = b.observe(file_access('~/state/agents.json'), 10, 0)  # answered; the next one is up
+        self.assertEqual([k for k, _ in second], ['dialog'])
+        self.assertIn('Read: ~/state/agents.json', second[0][1])
+        self.assertEqual(b.observe(file_access('~/state/agents.json'), 15, 0), [])
+
+    def test_open_dialog_reminders_until_it_closes(self):
+        b = self.bell(remind=300, warm=0, stall=10**9)
+        self.assertEqual([k for k, _ in b.observe(AGY_PERMISSION, 0, 0)], ['dialog'])
+        self.assertEqual(b.observe(AGY_PERMISSION, 299, 0), [])
+        events = b.observe(AGY_PERMISSION, 300, 0)
+        self.assertEqual([k for k, _ in events], ['dialog-open'])
+        text = bell_mod.message(*events[0], 'w')
+        self.assertIn('still open after 5 minutes', text)
+        self.assertIn('3. No, deny access', text)
+        self.assertEqual(b.observe(AGY_PERMISSION, 450, 0), [])
+        events = b.observe(AGY_PERMISSION, 600, 0)
+        self.assertIn('after 10 minutes', bell_mod.message(*events[0], 'w'))
+        self.assertEqual(b.observe(IDLE, 700, 0), [])     # closed
+        self.assertEqual(b.observe(IDLE, 1300, 0), [])    # no reminders after it closed
+        off = self.bell(remind=0)
+        off.observe(AGY_PERMISSION, 0, 0)
+        self.assertEqual(off.observe(AGY_PERMISSION, 10**5, 0), [])
+
+    def test_spinner_does_not_make_a_dialog_new(self):
+        b = self.bell()
+        b.observe(AGY_PERMISSION + '⠋ Working (3s · esc to cancel)\n', 5, 0)
+        self.assertEqual(b.observe(AGY_PERMISSION + '⠙ Working (8s · esc to cancel)\n', 10, 0), [])
+
     def test_trust_and_yes_no_prompts(self):
         for screen in (AGY_TRUST, 'Overwrite review.md? (y/n)\n', 'Do you want to run this command?\n'):
             self.assertEqual([k for k, _ in self.bell().observe(screen, 5, 0)], ['dialog'], screen)
