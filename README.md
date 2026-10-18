@@ -16,7 +16,13 @@ provider and profile unless explicitly overridden.
 - `tmux-subagent-send.sh` types one follow-up into a Claude child's input box
   and reports `SENT`, `NOT-SUBMITTED` or `REFUSED`;
 - `tmux-subagent-status.sh` appends a status line for hooks, and
-  `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it.
+  `tmux-subagent-codex-notify.sh` adapts Codex `notify` to it;
+- `tmux-subagent-agy-profile.sh` builds a throwaway, sandboxed agy profile
+  (token copy, sandbox settings, write rules, Stop hook), reads its account's
+  quota, and deletes the token copy afterwards;
+- `tmux-subagent-agy-bell.sh` and `tmux-subagent-agy-stop-hook.sh` wake the
+  operator of an agy worker on turn ends, dialogs, stalls and exit, through
+  Paseo or the events log, with keep-warm pings while it waits.
 
 Ownership-checked follow-up dispatch is still planned. Closure is a documented
 procedure rather than a packaged command (see "Finished children").
@@ -78,6 +84,12 @@ agy children default to **Gemini Flash Latest**; request **Gemini Pro Latest**
 explicitly to use Pro. Latest is resolved from `agy models` at launch and the
 concrete model is recorded in metadata and the tmux name. A Pro parent does not
 make its children Pro.
+
+To have an agy worker (for example Gemini 4 Argon) write code while a Claude or
+Codex operator verifies, commits and integrates, follow the skill's "Operating
+an agy worker" section: the worker edits inside agy's terminal sandbox on a
+throwaway profile, and a zero-token bell plus agy's Stop hook wake the operator
+instead of letting it poll.
 
 For read-only work on Gemini 4 Argon (reviews, plan critique, second
 opinions), invoke `/argon-readonly` instead. It covers checking which account

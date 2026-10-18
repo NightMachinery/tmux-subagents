@@ -7,12 +7,12 @@ description: Use Gemini 4 Argon through the Antigravity CLI (agy) for work that 
 
 Gemini 4 Argon is a strong reasoning model offered in the Antigravity CLI (`agy`) to some accounts. It is a good second opinion for review and planning, but it has two traps: on large inputs a long answer can be cut off and lost while the quota is still charged, and at medium effort it may spend its whole answer on visible working notes. This skill is about getting a usable result from it for work that needs no writes.
 
-When the shared `delegate` skill is installed, read it first for worker choice, account boundaries, briefs and result review; this skill only covers Argon itself. Use `tmux-subagents` instead when the job needs an interactive, attachable session.
+When the shared `delegate` skill is installed, read it first for worker choice, account boundaries, briefs and result review; this skill only covers Argon itself. Use `tmux-subagents` instead when the job needs an interactive, attachable session, and its section "Operating an agy worker" when Argon must write: a sandboxed throwaway profile, a bell that wakes the operator, quota readings before and after, and the operator verifying and committing.
 
 ## When to use it
 
 - Good fits: reviewing a diff or a module for real defects, critiquing a design or plan, checking a proof or an argument, comparing approaches, summarizing what a body of local files says, producing a list of risks or test cases.
-- Poor fits: anything that must edit files or run commands with effects, quick lookups (a cheaper model is enough), and jobs whose input is much larger than a few thousand lines (split them first).
+- Poor fits: anything that must edit files or run commands with effects (see "Operating an agy worker" in `tmux-subagents` for that), quick lookups (a cheaper model is enough), and jobs whose input is much larger than a few thousand lines (split them first).
 - Never use it to reach a verdict nobody checks. Treat every finding as a claim to verify (see Verify).
 
 ## 1. Check access

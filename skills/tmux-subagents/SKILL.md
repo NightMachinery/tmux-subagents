@@ -143,8 +143,8 @@ The launch helper writes one entry per launch: node, root and parent IDs,
 lineage, run, task ID, provider, the resolved launcher token, working directory,
 tmux socket, session and pane IDs, `requested_model` (parsed from `--model`), an
 empty `observed_model`, `notify` (`hook` when a turn-end hook is wired at
-launch, `file-only` when not, agy today; a separate question from the push
-channel in Notifications), `created`, `process_state: running` and
+launch, `file-only` when not, as for agy except on a hooked throwaway profile;
+a separate question from the push channel in Notifications), `created`, `process_state: running` and
 `task_outcome: unknown`. The rest is manual: the local profile reference, the
 observed model when known (the name keeps the launch model), an external parent
 recorded without inventing a tmux pane. Two consequences: `process_state` is
@@ -295,10 +295,12 @@ queue --thread ID --message TEXT`, evaluate it as a follow-up transport
 launcher for it, using its own account configuration; do not substitute the
 separate `gemini` CLI, invent an `agy --profile` flag, or assume Claude/Codex
 profile variables apply. agy has no auto-approve mode (`--mode accept-edits`
-still confirms destructive actions); its only unattended posture is
+still confirms destructive actions). For unattended work that writes, prefer
+its terminal sandbox on a throwaway profile (Operating an agy worker), which
+needs no bypass. Otherwise the unattended posture is
 `--dangerously-skip-permissions`, which the user authorized for unattended agy
-children on 2026-09-18. Pass it explicitly in every unattended launch and
-confirm it in the pane.
+children on 2026-09-18; pass it explicitly in every such launch and confirm it
+in the pane.
 
 *Model policy.* Resolve Gemini Flash Latest through `agy models` in the selected
 profile at launch, unless the user explicitly requested Pro for that child or
@@ -329,8 +331,9 @@ same profile with:
 
 never `--continue`, which can select another agent's most recent conversation.
 agy has no equivalent of Claude's `ListAgents`/`SendMessage`, so an agy child is
-file-only for notifications (Notifications), and with no verified message
-queue, follow-ups go through the ownership rules.
+file-only for notifications (Notifications) unless it runs with the Stop hook
+and bell of Operating an agy worker, and with no verified message queue,
+follow-ups go through the ownership rules.
 
 **Skill loading.** Put this skill in the provider's discovery location and its
 absolute path in every child brief, so a child can still read it when discovery
@@ -428,11 +431,12 @@ replacing the user's settings; Codex gets `-c
 'notify=["<abs>/tmux-subagent-codex-notify.sh","TASK","NODE"]'`, whose adapter
 also execs the user's original notify command with the same payload so an
 existing bell keeps ringing (pass its argv words as repeated `--notify-chain`
-items). Both land in `status.jsonl` with the provider's payload. A turn end is
-not task completion. Not verified: `Notification` hooks (matcher
-`permission_prompt` or `idle_prompt` could record `needs_input` the same way; a
-hook only appends a status line and never creates a result file), agy hooks,
-`codex queue`, and message ordering while the parent stays busy.
+items). Both land in `status.jsonl` with the provider's payload. agy has no
+per-invocation hook flag; its Stop hook lives in a throwaway profile (Operating
+an agy worker). A turn end is not task completion. Not verified: `Notification`
+hooks (matcher `permission_prompt` or `idle_prompt` could record `needs_input`
+the same way; a hook only appends a status line and never creates a result
+file), `codex queue`, and message ordering while the parent stays busy.
 
 **Supervising with the watcher.** One zero-token watcher covers every child of
 a parent, however many there are and whenever they were launched:
@@ -463,6 +467,129 @@ is empty, and allows one watcher per selection. `--root ID` and `--node ID`
 select differently; `--timeout S` bounds a run for a periodic recovery ping. It
 reads `tasks/<task_id>/` under the state directory, or an entry's optional
 `task_dir` field, set by hand.
+
+## Operating an agy worker
+
+Use this when a task needs writes and should run on an agy account's quota
+(such as Gemini 4 Argon's own weekly bucket) while a Claude or Codex agent
+stays responsible for it. The **operator** is the parent: it writes the brief,
+launches the worker, answers dialogs, runs what the sandbox cannot, verifies,
+commits and integrates. The **worker** is agy, editing files in its workspace
+under agy's terminal sandbox. For read-only work, the `argon-readonly` skill's
+headless run is simpler.
+
+**Profile.** Never edit the user's own agy configuration; build a throwaway
+profile in the private task directory:
+
+    profile="$task_dir/agy-profile"
+    "$skill_dir/scripts/tmux-subagent-agy-profile.sh" create "$profile" \
+      --workspace "$workdir" [--write EXTRA_DIR]... [--source ~/.gemini]
+
+It copies the account's token and onboarding state with `cp` (never print or
+read the token), writes the verified sandbox settings
+(`enableTerminalSandbox: true`, `toolPermission: "proceed-in-sandbox"`,
+`artifactReviewPolicy: "agent-decides"`), an explicit
+`write_file(<abs dir>/)` rule per workspace and `--write` root (agy 1.4.2's
+implicit workspace grant denied even in-workspace writes), and the workspace
+as trusted, and installs the Stop hook in the profile's `config/hooks.json`.
+Without the copied onboarding state agy shows its first-run screens, and the
+terms screen arrives with its data-collection box already ticked: untick it,
+never accept it for the user. Never add `--dangerously-skip-permissions` or an
+`unsandboxed(...)` rule to this setup.
+
+**Launch** through the launch helper with `--provider agy`. Call agy by
+absolute path, since a local wrapper may reject profile flags, and pass the
+bell's target in `TMUX_SUBAGENT_AGY_NOTIFY`, which the Stop hook reads:
+`paseo:<operator agent id>` for a Paseo operator, or `log:$task_dir/events.log`
+so the watcher wakes any other parent. `SSH_CONNECTION` makes agy read the
+copied token file instead of the system keychain (verified on macOS):
+
+    agy_bin=$(zsh -c 'whence -p agy')
+    flags=$("$skill_dir/scripts/tmux-subagent-agy-profile.sh" flags "$profile")
+    env="TMUX_SUBAGENT_AGY_NOTIFY=paseo:$PASEO_AGENT_ID SSH_CONNECTION=\${SSH_CONNECTION:-agy-file-auth}"
+    launch="$env $agy_bin $flags --model gemini-4-argon-medium --sandbox --prompt-interactive 'Read $task_dir/brief.md and carry it out'"
+    resume="$env agent-session-resume-exact agy \"\$AGENT_SESSION_ID\" \"\$AGENT_SESSION_CWD\" $agy_bin $flags --model gemini-4-argon-medium --sandbox"
+
+The profile path must contain no spaces, since `flags` prints it unquoted. The
+registry then records `notify: hook`, and with the launch helper's task and node
+variables each turn end also lands in `status.jsonl`. Not verified: resuming a
+profile-launched worker through the plugin.
+
+**Bell.** The Stop hook reports turn ends; dialogs, stalls and exits need the
+pane watched. Start the zero-token bell in its own detached session, so it
+outlives the operator's turns:
+
+    tmux new-session -d -s "bell-$name" \
+      "'$skill_dir/scripts/tmux-subagent-agy-bell.sh' --node '$name' --notify paseo:$PASEO_AGENT_ID"
+
+Omit `--notify` to use the node's `events.log`, and run the watcher as in
+Notifications; with that target the bell leaves menus the watcher reports to
+it. The bell sends `turn-end` (the `esc to cancel` busy marker gone, when the
+hook did not already say so), `dialog`, `stall` (busy with an unchanged pane
+for `AGY_BELL_STALL` s, 1200 by default), keep-warm pings, and the pane's exit,
+then exits itself.
+
+**The loop.** Hand over the task, then end your turn: never poll, never sleep
+in a loop, never re-read the pane "to check", because each check is a model
+turn over the operator's whole context. On a message:
+
+- turn end: read the pane and the diff, run the checks, and reply in the
+  worker's input box (`tmux send-keys -t "$pane" -l TEXT`, then a separate
+  `Enter`, only while its prompt shows and is empty; the send helper only
+  knows Claude's input box);
+- dialog: allow once what the task needs (reads, writes inside the write
+  roots, sandboxed commands in the workspace) and deny writes elsewhere,
+  network access and anything unsandboxed; never choose an "always" answer;
+- stall: read the pane; a cut stream needs a "continue" message;
+- keep-warm: reply with one word and end the turn. The ping goes out while the
+  worker is busy and the operator idle and silent for `AGY_BELL_WARM` s (1500,
+  inside both Claude's cache life of about an hour and OpenAI's GPT-6.x
+  prefix cache of about 30 minutes), for at most `AGY_BELL_WARM_MAX` s (12600)
+  after the last real event, beyond which a ping costs more than one cold
+  reread. `AGY_BELL_WARM=0` turns it off.
+
+**Verify and commit.** The operator runs the heavy checks, feeds failures back,
+and commits: a worktree's git metadata lives outside the workspace, so the
+sandboxed worker can edit but not commit. Name the agy model in the commit's
+co-author trailer, and treat its claims as unverified until checked, as in
+Results.
+
+**Quota.** Read the worker's account quota before and after each task, and
+record both readings with the task's result:
+
+    "$skill_dir/scripts/tmux-subagent-agy-profile.sh" usage "$profile"
+
+This runs `agy -p /usage` for the profile's account, which spends no quota but
+asks the backend, taking a few seconds. Each row is
+`<group> <label> <remaining>% <reset in UTC>`, tab-separated: the percentage
+*remains*, unlike Claude's and Codex's used-percent. Gemini 4 Argon has its own
+weekly bucket, separate from the Gemini five-hour and weekly ones; the readings
+are whole percents. A sandboxed operator, such as Codex under workspace-write,
+gets "quota unavailable" unless the call runs with escalation. A local status
+helper may wrap this (on the author's machine, `agy-status --account NAME
+[--json]`). Never write the account's email address into a brief or result.
+
+**Cleanup.** Exit agy (`/quit`, or Ctrl-C twice), let the bell exit or kill its
+session, then delete the token copy with
+`tmux-subagent-agy-profile.sh destroy "$profile"` (`--all` also removes the
+profile and its conversation history). Close the child per Cleanup.
+
+**Measured (2026-10-18, agy 1.4.2).**
+
+- Argon Medium, interactive with these settings, reviewed a real change in
+  about ten minutes with zero permission dialogs. Reads outside the workspace
+  usually pass silently (the sandbox guards writes), but one run asked once for
+  a file outside it ("outside workspace": allow, always allow non-workspace
+  access, or deny); copy required inputs into the workspace.
+- Tools may be missing inside the sandbox (`pytest` was), and commands that
+  write caches or lock directories outside the workspace fail unless those
+  directories get `--write` rules, so the operator runs them.
+- A Codex operator's sandboxed shell cannot reach the tmux socket: its tmux
+  commands and the quota call need escalation. A Claude operator needs a model
+  with auto mode; Haiku 4.5 has none, so every command waited for approval.
+- agy hooks: `Stop`, `PreToolUse`, `PostToolUse`, `PreInvocation`,
+  `PostInvocation` and, in practice, `SessionStart`. None reports a dialog,
+  hence the bell. A hook must print `{}` and return at once.
 
 ## Coordinator handoff
 
@@ -582,6 +709,20 @@ directory to parent, child, and hooks.
   comments hold the submit mechanics.
 - `tmux-subagent-codex-notify.sh TASK_ID NODE_ID [CHAIN_CMD ARGS...] PAYLOAD`
   logs a Codex turn end and chains the user's own notify command.
+- `tmux-subagent-agy-profile.sh create PROFILE --workspace DIR [--write DIR]...
+  [--source ROOT] [--no-hook]` builds a sandboxed throwaway agy profile; `flags
+  PROFILE` prints its launch flags, `usage PROFILE` reads the account's quota,
+  and `destroy PROFILE [--all]` deletes the token copy (or the whole profile,
+  only one this script made). Exit 64 is a usage error or a refusal.
+- `tmux-subagent-agy-bell.sh (--node ID | --pane TARGET [--socket PATH])
+  [--notify paseo:ID|log:PATH] [--label NAME] [--poll S] [--stall S] [--warm S]
+  [--warm-max S]` is the zero-token bell for one agy worker (Operating an agy
+  worker); the thresholds also read `AGY_BELL_POLL`, `AGY_BELL_STALL`,
+  `AGY_BELL_WARM` and `AGY_BELL_WARM_MAX`. Exit 0 when the pane exits or
+  disappears, 3 when another bell watches it.
+- `tmux-subagent-agy-stop-hook.sh` is the agy Stop hook that profile installs:
+  it reports a turn end to `TMUX_SUBAGENT_AGY_NOTIFY` and `status.jsonl`,
+  prints `{}` and returns at once.
 
 Status events publish no results and update no registry lifecycle state.
 Ownership checks are manual.

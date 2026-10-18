@@ -223,6 +223,33 @@ Checked instruction consistency and skill validation. An interactive AGY worker
 and AGY skill discovery have not been smoke-tested in this change; no model
 task was launched and no global profile or skill installation was modified.
 
+### The sandboxed operator pattern (2026-10-18, agy 1.4.2)
+
+agy keeps hooks in a profile's `config/hooks.json`, with no per-invocation
+flag, so the launch helper could not wire a turn-end hook without editing the
+user's global configuration. A throwaway profile per worker solves that and
+isolates the sandbox settings at the same time: `tmux-subagent-agy-profile.sh`
+builds one from copies of the token and onboarding files, and the launcher
+records `notify: hook` when the profile's hooks name the Stop hook.
+
+Verified live with Flash Low on a scratch workspace: the profile helper's
+settings let the worker write a file in the workspace with no dialog; copying
+`cache/onboarding.json` skips the colour and terms screens (copying
+`jetski_state.pbtxt` alone did not, and the terms screen then showed its
+data-collection box pre-ticked); listing the workspace in `trustedWorkspaces`
+skips the trust question; the Stop hook appended one line to the events log
+and the bell did not repeat it; the bell reported the worker's exit and
+stopped; `agy -p /usage` worked through the profile's flags. Argon trials the
+same day supplied the dialog counts and caveats in the skill's section.
+
+Why a pane-watching bell beside the hook: agy has no dialog or notification
+hook, and the operator must not poll, since each check is a model turn over its
+whole context. Why the bell skips menus for a log target: the registry watcher
+already reports them, and two wake-ups for one menu cost a turn each. Keep-warm
+pings go out only while the worker is busy, since an idle worker means the
+operator already knows and is waiting on someone else, and only within a bound
+after the last real event, past which a ping costs more than one cold reread.
+
 Sources:
 
 - [AGY model selection and resume](https://antigravity.google/docs/cli/headless/)
