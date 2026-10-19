@@ -89,7 +89,11 @@ To have an agy worker (for example Gemini 4 Argon) write code while a Claude or
 Codex operator verifies, commits and integrates, follow the skill's "Operating
 an agy worker" section: the worker edits inside agy's terminal sandbox on a
 throwaway profile, and a zero-token bell plus agy's Stop hook wake the operator
-instead of letting it poll.
+instead of letting it poll. A Codex operator such as Luna Max runs in auto-review
+mode and reviews the worker's remaining dialogs within the task's authorization.
+Operator-driven workers never use `--dangerously-skip-permissions`; an
+operatorless launch with that flag requires an explicit user request for
+permission bypass.
 
 For read-only work on Gemini 4 Argon (reviews, plan critique, second
 opinions), invoke `/argon-readonly` instead. It covers checking which account

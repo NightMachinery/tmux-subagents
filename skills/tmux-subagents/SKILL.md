@@ -297,12 +297,16 @@ queue --thread ID --message TEXT`, evaluate it as a follow-up transport
 launcher for it, using its own account configuration; do not substitute the
 separate `gemini` CLI, invent an `agy --profile` flag, or assume Claude/Codex
 profile variables apply. agy has no auto-approve mode (`--mode accept-edits`
-still confirms destructive actions). For unattended work that writes, prefer
-its terminal sandbox on a throwaway profile (Operating an agy worker), which
-needs no bypass. Otherwise the unattended posture is
-`--dangerously-skip-permissions`, which the user authorized for unattended agy
-children on 2026-09-18; pass it explicitly in every such launch and confirm it
-in the pane.
+still confirms destructive actions). For unattended agy work, use an operator
+such as Luna Max in auto-review mode and the worker's terminal sandbox on a
+throwaway profile (Operating an agy worker). The operator reviews remaining
+dialogs within the task's authorization; the worker never bypasses them.
+
+`--dangerously-skip-permissions` is reserved for an operatorless agy launch
+that the user explicitly requests with permission bypass. A request to use agy,
+a model, or unattended work does not authorize that flag. Without that explicit
+request, use the operator workflow or report that the operator is unavailable;
+do not fall back to bypass because of a dialog, a sandbox refusal or a stall.
 
 *Model policy.* Resolve Gemini Flash Latest through `agy models` in the selected
 profile at launch, unless the user explicitly requested Pro for that child or
@@ -319,23 +323,20 @@ resolved, report that instead of substituting. Record policy and exact slug in
 metadata, keep the sanitized model in the session name, and keep today's
 version out of defaults.
 
-*Interactive launch and resume.* Start the initial turn inside the owned
-session with, for example:
+*Interactive launch and resume.* With an operator, use the sandboxed launch
+and exact-resume commands in Operating an agy worker, including the throwaway
+profile's flags and the resolved model. Point at the private brief rather than
+putting sensitive task text on the command line. `--prompt-interactive` keeps
+the session interactive; `--print` and `--prompt` are headless. Preserve the
+same account, profile and sandbox posture on resume. Only an explicitly
+requested operatorless bypass launch may carry `--dangerously-skip-permissions`
+on its initial command and exact-resume command.
 
-    zsh -c 'agy --model gemini-3.8-flash-low --dangerously-skip-permissions --prompt-interactive "Read /abs/path/brief.md and carry it out"'
-
-substituting the resolved slug and pointing at the private brief rather than
-putting sensitive text on the command line. `--prompt-interactive` keeps the
-session interactive; `--print` and `--prompt` are headless. Resume under the
-same profile with:
-
-    agent-session-resume-exact agy "$AGENT_SESSION_ID" "$AGENT_SESSION_CWD" agy --model "$resolved_model" --dangerously-skip-permissions
-
-never `--continue`, which can select another agent's most recent conversation.
-agy has no equivalent of Claude's `ListAgents`/`SendMessage`, so an agy child is
-file-only for notifications (Notifications) unless it runs with the Stop hook
-and bell of Operating an agy worker, and with no verified message queue,
-follow-ups go through the ownership rules.
+Never use `--continue`, which can select another agent's most recent
+conversation. agy has no equivalent of Claude's `ListAgents`/`SendMessage`, so
+an agy child is file-only for notifications (Notifications) unless it runs
+with the Stop hook and bell of Operating an agy worker, and with no verified
+message queue, follow-ups go through the ownership rules.
 
 **Skill loading.** Put this skill in the provider's discovery location and its
 absolute path in every child brief, so a child can still read it when discovery
@@ -475,9 +476,13 @@ reads `tasks/<task_id>/` under the state directory, or an entry's optional
 Use this when a task needs writes and should run on an agy account's quota
 (such as Gemini 4 Argon's own weekly bucket) while a Claude or Codex agent
 stays responsible for it. The **operator** is the parent: it writes the brief,
-launches the worker, answers dialogs, runs what the sandbox cannot, verifies,
-commits and integrates. The **worker** is agy, editing files in its workspace
-under agy's terminal sandbox. For read-only work, the `argon-readonly` skill's
+launches the worker, reviews and answers dialogs, runs authorized commands the
+sandbox cannot, verifies, commits and integrates. Run a Codex operator such as
+Luna Max in auto-review mode, or a Claude operator in auto mode, so eligible
+operator tool approvals are reviewed automatically. The **worker** is agy,
+editing files in its workspace under agy's terminal sandbox, with no permission
+bypass. If an action exceeds the authorized scope, the operator asks the user
+instead of approving it. For read-only work, the `argon-readonly` skill's
 headless run is simpler.
 
 **Profile.** Never edit the user's own agy configuration; build a throwaway

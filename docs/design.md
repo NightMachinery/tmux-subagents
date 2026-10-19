@@ -337,3 +337,14 @@ the aliases with `delegate` to preserve their relative links. The personal
 shell repository discovers both repositories through its standalone
 skill-repository root; it must not retain duplicate source directories with
 the same skill names.
+
+### Operator permission boundary (2026-10-19)
+
+The operator pattern is the default for unattended agy work: Luna Max in
+auto-review mode, or Claude in auto mode, reviews the worker's remaining
+dialogs while agy stays in its terminal sandbox. A blanket historical bypass
+authorization must not become a fallback for a blocked operator workflow.
+An operatorless agy launch using `--dangerously-skip-permissions` requires the
+user to request permission bypass explicitly. A request for agy or unattended
+execution alone is insufficient. The provider section now routes launch and
+resume to the sandboxed recipe, so its examples agree with that boundary.
