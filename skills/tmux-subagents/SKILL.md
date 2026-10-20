@@ -5,6 +5,10 @@ description: Launch and coordinate Claude Code, Codex, or Google Antigravity (ag
 
 # tmux subagents
 
+Inside Paseo (`PASEO_AGENT_ID` is set), launch agents through Paseo instead
+(the `paseo` skill), unless the user explicitly asks for tmux or Paseo lacks the
+provider or account.
+
 When the shared `delegate` skill is installed, read it for worker mode/model
 selection, account boundaries, briefs, ownership, and result review. This skill
 provides the native tmux backend. Explicit user choices take precedence; model
