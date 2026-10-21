@@ -216,12 +216,12 @@ the pane regardless.
 
 **Permissions.** Pass the permission flag explicitly in every launch command and
 confirm it in the pane's status line; a child inherits no usable posture. For
-Claude use `--permission-mode auto`: a profile can default to plan mode (the
-author's do), where a child cannot write until someone approves a plan, while an
-interactive child in an already-trusted directory shows `auto mode on`. Print
-mode (`claude -p`) does not run auto mode. If the status line shows `accept
-edits on` or `plan mode on` instead, fall back to `--permission-mode
-acceptEdits`. For Codex, the local `codex-m` passes `--approve-for-me`
+interactive Claude workers use `--permission-mode auto`: a profile can default
+to plan mode (the author's do), where a child cannot write until someone approves a plan, while an
+interactive child in an already-trusted directory shows `auto mode on`. If its
+status line shows `accept edits on` or `plan mode on` instead, fall back to
+`--permission-mode acceptEdits`. For Codex, the local `codex-m` passes
+`--approve-for-me`
 (approvals auto-reviewed inside the workspace-write sandbox); a bare `codex`
 needs `--approve-for-me` or `-a on-failure -s workspace-write`. Inference, not
 verified: under workspace-write a write outside the child's workdir, such as its
@@ -282,9 +282,10 @@ alternate configuration directory, and default-profile configuration can depend
 on leaving it unset, so check that the tmux server did not hand the child
 another profile. Resume by explicit session ID under the same profile, never by
 "most recent session here" and never as a second writable copy of a running
-conversation. `--print` and its JSON modes are non-interactive, so they give
-none of the live TUI this workflow needs; native agent teams are a separate
-feature that may not support nested teammates.
+conversation. When live TUI access is required, `--print` and its JSON modes
+are unsuitable; native agent teams are a separate feature that may not support
+nested teammates.
+Before launching a print-mode worker, read [references/print-mode.md](references/print-mode.md) only for that launch.
 
 **Codex.** Launch interactive `codex` with the resolved profile, sandbox, and
 approval settings, checking its help independently of Claude's syntax: it takes

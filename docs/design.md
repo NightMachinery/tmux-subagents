@@ -7,6 +7,11 @@ helpers' launch, registration, and waiting paths were exercised with real
 sessions on 2026-09-09, and the local close path against throwaway children on
 2026-09-10; the recursive protocol and ownership handover remain unvalidated.
 
+Intentionally headless tmux workers have a separate
+[print-mode reference](../skills/tmux-subagents/references/print-mode.md), loaded
+only for that launch. Its historical observations do not replace the main
+skill's interactive permission and readiness checks.
+
 ## Accepted direction
 
 - Use a standalone repository named tmux-subagents, with source under
