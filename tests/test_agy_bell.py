@@ -295,6 +295,30 @@ class PaseoTarget(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bell_mod.Target('mail:someone', tmp / 'bell.log')
 
+    def test_paseo_runs_outside_a_removed_directory(self):
+        # Node's paseo dies when its working directory is gone; this fake
+        # fails the same way, so a send from a removed worktree must not
+        # inherit that directory.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fake = tmp / 'paseo'
+            fake.write_text('#!/usr/bin/env python3\nimport json, os, sys\nos.getcwd()\n'
+                            'if sys.argv[1] == "inspect":\n    print(json.dumps({"Status": "idle"}))\n')
+            fake.chmod(0o700)
+            gone = tmp / 'worktree'
+            gone.mkdir()
+            old_path, old_cwd = os.environ['PATH'], os.getcwd()
+            os.environ['PATH'] = f'{tmp}:{old_path}'
+            try:
+                os.chdir(gone)
+                gone.rmdir()
+                target = bell_mod.Target('paseo:agent-1', tmp / 'bell.log')
+                self.assertTrue(target.send('[agy-bell] w: hello'))
+                self.assertTrue(target.idle())
+            finally:
+                os.chdir(old_cwd)
+                os.environ['PATH'] = old_path
+
 
 class Profile(unittest.TestCase):
     def setUp(self):

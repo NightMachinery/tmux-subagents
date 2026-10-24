@@ -173,6 +173,13 @@ def message(kind, text, label):
     return head + text
 
 
+def stable_cwd():
+    # The bell outlives the directory it was started in: a coordinator may
+    # merge and remove that worktree meanwhile, and the paseo CLI (Node)
+    # dies at startup when its working directory is gone.
+    return next((d for d in (os.path.expanduser('~'), '/') if os.path.isdir(d)), '/')
+
+
 class Target:
     def __init__(self, spec, log):
         kind, _, value = spec.partition(':')
@@ -186,7 +193,7 @@ class Target:
             with open(self.log, 'a') as out:
                 try:
                     ok = subprocess.run(['paseo', 'send', self.value, text, '--no-wait'],
-                                        stdout=out, stderr=out).returncode == 0
+                                        stdout=out, stderr=out, cwd=stable_cwd()).returncode == 0
                 except OSError as error:  # paseo missing: log it and keep watching
                     out.write(f'paseo send failed: {error}\n')
         else:
@@ -206,7 +213,8 @@ class Target:
         if self.kind != 'paseo':
             return True
         try:
-            out = subprocess.run(['paseo', 'inspect', self.value, '--json'], capture_output=True, text=True)
+            out = subprocess.run(['paseo', 'inspect', self.value, '--json'], capture_output=True, text=True,
+                                 cwd=stable_cwd())
             return json.loads(out.stdout).get('Status', '') == 'idle'
         except (OSError, ValueError, AttributeError):
             return False
