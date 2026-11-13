@@ -85,12 +85,18 @@ explicitly to use Pro. Latest is resolved from `agy models` at launch and the
 concrete model is recorded in metadata and the tmux name. A Pro parent does not
 make its children Pro.
 
-To have an agy worker (for example Gemini 4 Argon) write code while a Claude or
-Codex operator verifies, commits and integrates, follow the skill's "Operating
-an agy worker" section: the worker edits inside agy's terminal sandbox on a
-throwaway profile, and a zero-token bell plus agy's Stop hook wake the operator
-instead of letting it poll. A Codex operator such as Luna Max runs in auto-review
-mode and reviews the worker's remaining dialogs within the task's authorization.
+To have an agy worker write code while a Claude or Codex operator verifies,
+commits and integrates, follow the skill's "Operating an agy worker" section.
+Use the authorized normal profile with scoped session settings, or a throwaway
+profile when sandbox settings and per-profile hooks are needed. A zero-token
+bell wakes the operator instead of letting it poll. The operator reviews any
+remaining dialogs within the task's authorization.
+Current agy CLIs support `--mode auto` for edits and safe commands. Session-only
+`--settings` can mark an exact workspace trusted through `trustedWorkspaces`
+and grant the task's explicit file roots through `permissions.allow`; trust and
+file access are separate. See the skill's noninteractive-trust example. A normal
+account launch need not copy its profile just to use auto mode. When the user
+requests configured model/effort defaults, preserve and verify those defaults.
 Operator-driven workers never use `--dangerously-skip-permissions`; an
 operatorless launch with that flag requires an explicit user request for
 permission bypass.

@@ -301,11 +301,34 @@ queue --thread ID --message TEXT`, evaluate it as a follow-up transport
 **Google Antigravity (agy).** Launch Google's `agy` executable, or the local
 launcher for it, using its own account configuration; do not substitute the
 separate `gemini` CLI, invent an `agy --profile` flag, or assume Claude/Codex
-profile variables apply. agy has no auto-approve mode (`--mode accept-edits`
-still confirms destructive actions). For unattended agy work, use an operator
-such as Luna Max in auto-review mode and the worker's terminal sandbox on a
-throwaway profile (Operating an agy worker). The operator reviews remaining
-dialogs within the task's authorization; the worker never bypasses them.
+profile variables apply. Check the installed `agy --help`: `--mode auto`
+auto-approves edits and safe commands, while `accept-edits` and `plan` have
+different permission behavior. Auto mode does not bypass project trust or grant
+access to arbitrary files. An operator reviews remaining dialogs within the
+task's authorization; the worker never bypasses them. The parent can be that
+operator; a separate operator agent is not required.
+
+**Noninteractive workspace trust.** A CLI exposing `--settings` accepts
+session-only settings without editing the account's saved configuration.
+`trustedWorkspaces` skips the startup trust question for the exact absolute
+workspace path. File-tool access is separate: supply only the `read_file` and
+`write_file` roots the task authorizes, including its private brief/result
+directory when outside the workspace. Trusting the folder alone may leave
+individual file prompts even in auto mode. For example:
+
+```sh
+agy --mode auto \
+  --settings '{"trustedWorkspaces":["/absolute/workspace"],"permissions":{"allow":["read_file(/absolute/workspace/)","read_file(/absolute/task/)","write_file(/absolute/task/)"]}}' \
+  --prompt-interactive 'Read /absolute/task/brief.md and carry it out'
+```
+
+Add workspace write permission only when the child owns source edits. Resolve
+model/profile flags under the policies below, and preserve these same settings
+on exact resume. Use an owner-only JSON file if an inline settings object would
+be unwieldy; `--settings` accepts either form. These scoped grants do not replace
+the operator for commands or access outside the approved roots. If this CLI
+lacks session-only settings, use the throwaway-profile recipe below rather than
+silently changing the user's global permissions.
 
 `--dangerously-skip-permissions` is reserved for an operatorless agy launch
 that the user explicitly requests with permission bypass. A request to use agy,
@@ -313,10 +336,13 @@ a model, or unattended work does not authorize that flag. Without that explicit
 request, use the operator workflow or report that the operator is unavailable;
 do not fall back to bypass because of a dialog, a sandbox refusal or a stall.
 
-*Model policy.* Resolve Gemini Flash Latest through `agy models` in the selected
-profile at launch, unless the user explicitly requested Pro for that child or
-its subtree. A Pro parent does not make its children Pro, and difficulty, quota
-failures, or an unavailable Flash model never justify an upgrade. `agy models`
+*Model policy.* Honor a user's request for the launcher's configured defaults:
+omit `--model` and `--effort`, verify the displayed model/effort after startup,
+and record the observed values. Otherwise resolve Gemini Flash Latest through
+`agy models` in the selected profile at launch, unless the user explicitly
+requested another model family for that child or its subtree. A Pro parent does
+not make its children Pro, and difficulty, quota failures, or an unavailable
+Flash model never justify an upgrade. `agy models`
 prints exact slugs, not aliases (for example `gemini-3.8-flash-low`,
 `gemini-3.1-pro-high`); re-run it at launch and pass the newest slug in the
 requested family to `--model`. Literal `gemini-flash-latest` aliases are not
@@ -328,13 +354,14 @@ resolved, report that instead of substituting. Record policy and exact slug in
 metadata, keep the sanitized model in the session name, and keep today's
 version out of defaults.
 
-*Interactive launch and resume.* With an operator, use the sandboxed launch
-and exact-resume commands in Operating an agy worker, including the throwaway
-profile's flags and the resolved model. Point at the private brief rather than
-putting sensitive task text on the command line. `--prompt-interactive` keeps
-the session interactive; `--print` and `--prompt` are headless. Preserve the
-same account, profile and sandbox posture on resume. Only an explicitly
-requested operatorless bypass launch may carry `--dangerously-skip-permissions`
+*Interactive launch and resume.* Use the authorized account with `--mode auto`
+and the scoped session settings above, or the sandboxed throwaway-profile recipe
+in Operating an agy worker when isolated settings/hooks are needed. Preserve the
+selected account, model policy, permissions and settings on exact resume. Point
+at the private brief rather than putting sensitive task text on the command
+line. `--prompt-interactive` keeps the session interactive; `--print` and
+`--prompt` are headless. Only an explicitly requested operatorless bypass launch
+may carry `--dangerously-skip-permissions`
 on its initial command and exact-resume command.
 
 Never use `--continue`, which can select another agent's most recent
@@ -482,16 +509,20 @@ Use this when a task needs writes and should run on an agy account's quota
 (such as Gemini 4 Argon's own weekly bucket) while a Claude or Codex agent
 stays responsible for it. The **operator** is the parent: it writes the brief,
 launches the worker, reviews and answers dialogs, runs authorized commands the
-sandbox cannot, verifies, commits and integrates. Run a Codex operator such as
-Luna Max in auto-review mode, or a Claude operator in auto mode, so eligible
-operator tool approvals are reviewed automatically. The **worker** is agy,
-editing files in its workspace under agy's terminal sandbox, with no permission
-bypass. If an action exceeds the authorized scope, the operator asks the user
-instead of approving it. For read-only work, the `argon-readonly` skill's
-headless run is simpler.
+sandbox cannot, verifies, commits and integrates. Normal-profile auto-mode runs
+can use the scoped session settings above; the following profile recipe adds
+sandbox configuration and per-profile hooks without changing the user's profile.
+Run a Codex operator such as Luna Max in auto-review mode, or a Claude operator
+in auto mode, so eligible operator tool approvals are reviewed automatically. The **worker** is agy,
+editing only its authorized paths under the selected permission posture, with no
+permission bypass. Auto mode is not itself an operating-system sandbox. If an
+action exceeds the authorized scope, the operator asks the user instead of
+approving it. For read-only work, the `argon-readonly` skill's headless run is
+simpler.
 
-**Profile.** Never edit the user's own agy configuration; build a throwaway
-profile in the private state directory, outside every directory it grants:
+**Sandboxed profile option.** When isolated sandbox settings or hooks are
+needed, build a throwaway profile outside every directory it grants. Do not
+edit the user's saved agy configuration:
 
     profile="$state_dir/agy-profiles/$task_id"
     "$skill_dir/scripts/tmux-subagent-agy-profile.sh" create "$profile" \
@@ -516,8 +547,8 @@ terms screen arrives with its data-collection box already ticked: untick it,
 never accept it for the user. Never add `--dangerously-skip-permissions` or an
 `unsandboxed(...)` rule to this setup.
 
-**Launch** through the launch helper with `--provider agy`. Call agy by
-absolute path, since a local wrapper may reject profile flags, and pass the
+**Launch this profile** through the launch helper with `--provider agy`. Call
+agy by absolute path, since a local wrapper may reject profile flags, and pass the
 bell's target in `TMUX_SUBAGENT_AGY_NOTIFY`, which the Stop hook reads:
 `paseo:<operator agent id>` for a Paseo operator, or `log:$task_dir/events.log`
 so the watcher wakes any other parent. `SSH_CONNECTION` makes agy read the
@@ -535,7 +566,8 @@ variables each turn end also lands in `status.jsonl`. The Stop hook also
 records the worker's conversation for exact resume at its first turn end, so
 `Ctrl-b r` resumes it (verified) and the worker never runs the register script.
 
-**The worker's brief** is narrower than a tmux child's (Prepare). It holds the
+**The hooked-profile worker's brief** is narrower than a tmux child's
+(Prepare). It holds the
 objective, the owned paths, the checks to run, the result path and its format,
 the events-log and needs-input paths, and "work in small steps; after each say
 what changed and what comes next". It does not tell the worker to read this
