@@ -39,12 +39,8 @@ Launches never download dependencies.
 
 ```sh
 npx skills add NightMachinery/tmux-subagents --global \
-  --agent claude-code codex --skill tmux-subagents argon-readonly
+  --agent claude-code codex --skill tmux-subagents
 ```
-
-`argon-readonly` is a companion skill for running Gemini 4 Argon through
-`agy` on work that needs no writes; drop it from the list if you do not use
-Argon.
 
 The shared delegation policy (`delegate`, its `delegate-weaker` and `weaker`
 aliases, and `paseo-model-update`) lives in
@@ -101,10 +97,11 @@ Operator-driven workers never use `--dangerously-skip-permissions`; an
 operatorless launch with that flag requires an explicit user request for
 permission bypass.
 
-For read-only work on Gemini 4 Argon (reviews, plan critique, second
-opinions), invoke `/argon-readonly` instead. It covers checking which account
-lists Argon, a headless `--mode plan` run, sizing jobs so a long answer is not
-cut off, the separate weekly Argon quota, and verifying what it reports.
+The former `argon-readonly` skill, for read-only work on Gemini 4 Argon, was
+retired on 2026-11-13 now that Gemini 4 Hydrogen is the default agy model. Its
+notes (a headless `--mode plan` run, sizing jobs so a long answer is not cut
+off, Argon's separate weekly quota) are kept in
+[references/argon-readonly.md](skills/tmux-subagents/references/argon-readonly.md).
 
 ## Names and inspection
 
@@ -196,7 +193,7 @@ not just the prompt. Loading the skill grants no additional permissions and does
 not switch branches.
 
 - [Skill](skills/tmux-subagents/SKILL.md)
-- [Argon read-only skill](skills/argon-readonly/SKILL.md)
+- [Argon read-only notes (retired skill)](skills/tmux-subagents/references/argon-readonly.md)
 - [Design and remaining automation](docs/design.md)
 - [Related projects and integration choices](docs/related-projects.md)
 - [Skills CLI installation formats](https://github.com/vercel-labs/skills#source-formats)

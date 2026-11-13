@@ -1,13 +1,22 @@
----
+# Argon for read-only work (deprecated skill)
+
+This was the `argon-readonly` skill until 2026-11-13. It was retired because
+Gemini 4 Hydrogen at high effort (`gemini-4-hydrogen-high`) is now the default
+agy model: it scores at Argon's level on Artificial Analysis and draws on the
+general Gemini five-hour and weekly buckets instead of Argon's separate weekly
+one. Use these notes when a job is explicitly meant for Argon. They are kept
+current so the skill can come back: to restore it, move this file to
+`skills/argon-readonly/SKILL.md`, put back the frontmatter below, and relist it
+in the README.
+
+```yaml
 name: argon-readonly
 description: Use Gemini 4 Argon through the Antigravity CLI (agy) for work that needs no writes, such as code review, design or plan critique, second opinions and research over local files. Covers checking which account offers Argon, the read-only headless invocation, sizing jobs so a long answer is not cut off, prompt shapes that keep the result, capturing output, budgeting its separate weekly quota, and verifying what it reports.
----
+```
 
-# Argon for read-only work
+Gemini 4 Argon is a strong reasoning model offered in the Antigravity CLI (`agy`) to some accounts. It is a good second opinion for review and planning, but it has two traps: on large inputs a long answer can be cut off and lost while the quota is still charged, and at medium effort it may spend its whole answer on visible working notes. These notes are about getting a usable result from it for work that needs no writes.
 
-Gemini 4 Argon is a strong reasoning model offered in the Antigravity CLI (`agy`) to some accounts. It is a good second opinion for review and planning, but it has two traps: on large inputs a long answer can be cut off and lost while the quota is still charged, and at medium effort it may spend its whole answer on visible working notes. This skill is about getting a usable result from it for work that needs no writes.
-
-When the shared `delegate` skill is installed, read it first for worker choice, account boundaries, briefs and result review; this skill only covers Argon itself. Use `tmux-subagents` instead when the job needs an interactive, attachable session, and its section "Operating an agy worker" when Argon must write: a sandboxed throwaway profile, a bell that wakes the operator, quota readings before and after, and the operator verifying and committing.
+When the shared `delegate` skill is installed, read it first for worker choice, account boundaries, briefs and result review; these notes only cover Argon itself. Use `tmux-subagents` instead when the job needs an interactive, attachable session, and its section "Operating an agy worker" when Argon must write: a sandboxed throwaway profile, a bell that wakes the operator, quota readings before and after, and the operator verifying and committing.
 
 ## When to use it
 
@@ -84,6 +93,6 @@ Argon's findings read well whether or not they are right. Before anyone changes 
 - Expect some findings to describe intended behaviour as a bug, and some scenarios to rest on a misread line. Fix only what is confirmed.
 - Say in any report that the findings came from Argon and were verified (or not), and by whom.
 
-## Measurements behind this skill
+## Measurements behind these notes
 
 The trials, their token counts and quota readings are kept in the public note [Antigravity limits: Argon](https://github.com/NightMachinery/notes-public/blob/master/subjects/Google/Gemini/Antigravity/limits/Argon.org). Update the numbers here when new measurements change them.

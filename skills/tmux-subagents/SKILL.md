@@ -517,8 +517,9 @@ in auto mode, so eligible operator tool approvals are reviewed automatically. Th
 editing only its authorized paths under the selected permission posture, with no
 permission bypass. Auto mode is not itself an operating-system sandbox. If an
 action exceeds the authorized scope, the operator asks the user instead of
-approving it. For read-only work, the `argon-readonly` skill's headless run is
-simpler.
+approving it. For read-only work a headless `--mode plan` run is simpler; the
+deprecated Argon notes in [references/argon-readonly.md](references/argon-readonly.md)
+cover one.
 
 **Sandboxed profile option.** When isolated sandbox settings or hooks are
 needed, build a throwaway profile outside every directory it grants. Do not
