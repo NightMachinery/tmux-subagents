@@ -76,10 +76,10 @@ The skill guides the agent to launch a detached interactive session, give you
 its attach command, track parentage, and collect an explicit task result. A
 child receives this same skill and its parent context before delegating again.
 
-agy children default to **Gemini Flash Latest**; request **Gemini Pro Latest**
-explicitly to use Pro. Latest is resolved from `agy models` at launch and the
-concrete model is recorded in metadata and the tmux name. A Pro parent does not
-make its children Pro.
+agy children default to **Gemini 4 Hydrogen at high effort**; request another
+model explicitly for a child or its subtree. The newest slug in the family is
+resolved from `agy models` at launch and recorded in metadata and the tmux
+name. A stronger parent does not make its children stronger.
 
 To have an agy worker write code while a Claude or Codex operator verifies,
 commits and integrates, follow the skill's "Operating an agy worker" section.

@@ -338,16 +338,15 @@ do not fall back to bypass because of a dialog, a sandbox refusal or a stall.
 
 *Model policy.* Honor a user's request for the launcher's configured defaults:
 omit `--model` and `--effort`, verify the displayed model/effort after startup,
-and record the observed values. Otherwise resolve Gemini Flash Latest through
-`agy models` in the selected profile at launch, unless the user explicitly
-requested another model family for that child or its subtree. A Pro parent does
-not make its children Pro, and difficulty, quota failures, or an unavailable
-Flash model never justify an upgrade. `agy models`
-prints exact slugs, not aliases (for example `gemini-3.8-flash-low`,
-`gemini-3.1-pro-high`); re-run it at launch and pass the newest slug in the
-requested family to `--model`. Literal `gemini-flash-latest` aliases are not
-assumed to work, and Flash-Lite, another family, or a non-Gemini model is a
-different choice. Honor a requested effort, checking `agy --help`: a separate
+and record the observed values. Otherwise use Gemini 4 Hydrogen at high effort,
+the user's default for agy children, unless the user explicitly requested
+another model family for that child or its subtree. A stronger parent does not
+make its children stronger, and difficulty, quota failures, or an unavailable
+Hydrogen model never justify an upgrade. `agy models`
+prints exact slugs, not aliases (for example `gemini-4-hydrogen-high`,
+`gemini-3.8-flash-low`); re-run it at launch and pass the newest slug in the
+requested family to `--model`. Literal `*-latest` aliases are not assumed to
+work, and another family or a non-Gemini model is a different choice. Honor a requested effort, checking `agy --help`: a separate
 `--effort low|medium|high` flag exists alongside the effort baked into some
 slugs, so check which the selected model expects. If family or effort cannot be
 resolved, report that instead of substituting. Record policy and exact slug in
@@ -506,8 +505,8 @@ reads `tasks/<task_id>/` under the state directory, or an entry's optional
 ## Operating an agy worker
 
 Use this when a task needs writes and should run on an agy account's quota
-(such as Gemini 4 Argon's own weekly bucket) while a Claude or Codex agent
-stays responsible for it. The **operator** is the parent: it writes the brief,
+(Gemini's five-hour and weekly buckets; Argon has its own weekly bucket) while a
+Claude or Codex agent stays responsible for it. The **operator** is the parent: it writes the brief,
 launches the worker, reviews and answers dialogs, runs authorized commands the
 sandbox cannot, verifies, commits and integrates. Normal-profile auto-mode runs
 can use the scoped session settings above; the following profile recipe adds
@@ -558,8 +557,8 @@ copied token file instead of the system keychain (verified on macOS):
     agy_bin=$(zsh -c 'whence -p agy')
     flags=$("$skill_dir/scripts/tmux-subagent-agy-profile.sh" flags "$profile")
     env="TMUX_SUBAGENT_AGY_NOTIFY=paseo:$PASEO_AGENT_ID SSH_CONNECTION=\${SSH_CONNECTION:-agy-file-auth}"
-    launch="$env $agy_bin $flags --model gemini-4-argon-medium --sandbox --prompt-interactive 'Read $task_dir/brief.md and carry it out'"
-    resume="$env agent-session-resume-exact agy \"\$AGENT_SESSION_ID\" \"\$AGENT_SESSION_CWD\" $agy_bin $flags --model gemini-4-argon-medium --sandbox"
+    launch="$env $agy_bin $flags --model gemini-4-hydrogen-high --sandbox --prompt-interactive 'Read $task_dir/brief.md and carry it out'"
+    resume="$env agent-session-resume-exact agy \"\$AGENT_SESSION_ID\" \"\$AGENT_SESSION_CWD\" $agy_bin $flags --model gemini-4-hydrogen-high --sandbox"
 
 The profile path must contain no spaces, since `flags` prints it unquoted. The
 registry then records `notify: hook`, and with the launch helper's task and node

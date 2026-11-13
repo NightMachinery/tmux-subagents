@@ -24,8 +24,9 @@ skill's interactive permission and readiness checks.
   the child may access, including automatically loaded instructions and memory.
   Carry the restriction into descendants and revisit it when access expands.
 - Support Google Antigravity CLI (agy) alongside Claude Code and Codex. New agy
-  children use Gemini Flash Latest by default; Pro Latest requires an explicit
-  request scoped to the child or subtree. Provider/profile inheritance remains
+  children use Gemini 4 Hydrogen at high effort by default (Gemini Flash Latest
+  until 2026-11-13); another model requires an explicit request scoped to the
+  child or subtree. Provider/profile inheritance remains
   independent of model selection.
 - Keep finished children open and record them in a central private registry.
   Provide agent-clean-fz to select and close agents, with rich preview, and
