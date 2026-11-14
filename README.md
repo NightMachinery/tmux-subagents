@@ -76,7 +76,7 @@ The skill guides the agent to launch a detached interactive session, give you
 its attach command, track parentage, and collect an explicit task result. A
 child receives this same skill and its parent context before delegating again.
 
-agy children default to **Gemini 4 Hydrogen at high effort**; request another
+agy children default to **Gemini 4 Hydrogen at XHigh effort**; request another
 model explicitly for a child or its subtree. The newest slug in the family is
 resolved from `agy models` at launch and recorded in metadata and the tmux
 name. A stronger parent does not make its children stronger.

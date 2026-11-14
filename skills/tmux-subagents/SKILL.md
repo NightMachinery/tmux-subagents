@@ -338,12 +338,12 @@ do not fall back to bypass because of a dialog, a sandbox refusal or a stall.
 
 *Model policy.* Honor a user's request for the launcher's configured defaults:
 omit `--model` and `--effort`, verify the displayed model/effort after startup,
-and record the observed values. Otherwise use Gemini 4 Hydrogen at high effort,
-the user's default for agy children, unless the user explicitly requested
+and record the observed values. Otherwise use Gemini 4 Hydrogen at XHigh
+effort, the user's default for agy children (since 2026-11-14; high before), unless the user explicitly requested
 another model family for that child or its subtree. A stronger parent does not
 make its children stronger, and difficulty, quota failures, or an unavailable
 Hydrogen model never justify an upgrade. `agy models`
-prints exact slugs, not aliases (for example `gemini-4-hydrogen-high`,
+prints exact slugs, not aliases (for example `gemini-4-hydrogen-xhigh`,
 `gemini-3.8-flash-low`); re-run it at launch and pass the newest slug in the
 requested family to `--model`. Literal `*-latest` aliases are not assumed to
 work, and another family or a non-Gemini model is a different choice. Honor a requested effort, checking `agy --help`: a separate
@@ -557,8 +557,8 @@ copied token file instead of the system keychain (verified on macOS):
     agy_bin=$(zsh -c 'whence -p agy')
     flags=$("$skill_dir/scripts/tmux-subagent-agy-profile.sh" flags "$profile")
     env="TMUX_SUBAGENT_AGY_NOTIFY=paseo:$PASEO_AGENT_ID SSH_CONNECTION=\${SSH_CONNECTION:-agy-file-auth}"
-    launch="$env $agy_bin $flags --model gemini-4-hydrogen-high --sandbox --prompt-interactive 'Read $task_dir/brief.md and carry it out'"
-    resume="$env agent-session-resume-exact agy \"\$AGENT_SESSION_ID\" \"\$AGENT_SESSION_CWD\" $agy_bin $flags --model gemini-4-hydrogen-high --sandbox"
+    launch="$env $agy_bin $flags --model gemini-4-hydrogen-xhigh --sandbox --prompt-interactive 'Read $task_dir/brief.md and carry it out'"
+    resume="$env agent-session-resume-exact agy \"\$AGENT_SESSION_ID\" \"\$AGENT_SESSION_CWD\" $agy_bin $flags --model gemini-4-hydrogen-xhigh --sandbox"
 
 The profile path must contain no spaces, since `flags` prints it unquoted. The
 registry then records `notify: hook`, and with the launch helper's task and node

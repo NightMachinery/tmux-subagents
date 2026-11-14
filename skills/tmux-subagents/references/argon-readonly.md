@@ -1,8 +1,8 @@
 # Argon for read-only work (deprecated skill)
 
 This was the `argon-readonly` skill until 2026-11-13. It was retired because
-Gemini 4 Hydrogen at high effort (`gemini-4-hydrogen-high`) is now the default
-agy model: it scores at Argon's level on Artificial Analysis and draws on the
+Gemini 4 Hydrogen (then at high effort; at XHigh, `gemini-4-hydrogen-xhigh`,
+since 2026-11-14) is now the default agy model: it scores at Argon's level on Artificial Analysis and draws on the
 general Gemini five-hour and weekly buckets instead of Argon's separate weekly
 one. Use these notes when a job is explicitly meant for Argon. They are kept
 current so the skill can come back: to restore it, move this file to
