@@ -38,7 +38,7 @@ if [ -n "${TMUX_PANE:-}" ]; then
 fi
 case $spec in
   paseo:?*)
-    ( command paseo send "${spec#paseo:}" "[agy-bell] $name: the worker's turn ended. Last lines of its pane:
+    ( command paseo send --behavior "${TMUX_SUBAGENT_AGY_SEND_BEHAVIOR:-${PASEO_SEND_BEHAVIOR:-steer}}" "${spec#paseo:}" "[agy-bell] $name: the worker's turn ended. Last lines of its pane:
 $tail" --no-wait >/dev/null 2>&1 & ) ;;
   log:?*)
     printf '[%s] [agy-bell] %s: turn ended\n' "$(command date -u '+%Y-%m-%d %H:%M:%S UTC')" "$name" \

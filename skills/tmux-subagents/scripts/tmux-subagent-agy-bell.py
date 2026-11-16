@@ -173,6 +173,11 @@ def message(kind, text, label):
     return head + text
 
 
+def send_behavior():
+    """How `paseo send` treats a busy agent: steer joins its turn, interrupt aborts it."""
+    return os.environ.get('TMUX_SUBAGENT_AGY_SEND_BEHAVIOR') or os.environ.get('PASEO_SEND_BEHAVIOR') or 'steer'
+
+
 def stable_cwd():
     # The bell outlives the directory it was started in: a coordinator may
     # merge and remove that worktree meanwhile, and the paseo CLI (Node)
@@ -192,7 +197,7 @@ class Target:
         if self.kind == 'paseo':
             with open(self.log, 'a') as out:
                 try:
-                    ok = subprocess.run(['paseo', 'send', self.value, text, '--no-wait'],
+                    ok = subprocess.run(['paseo', 'send', self.value, text, '--no-wait', '--behavior', send_behavior()],
                                         stdout=out, stderr=out, cwd=stable_cwd()).returncode == 0
                 except OSError as error:  # paseo missing: log it and keep watching
                     out.write(f'paseo send failed: {error}\n')
